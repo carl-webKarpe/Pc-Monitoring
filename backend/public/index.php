@@ -16,6 +16,7 @@ require_once __DIR__ . '/../controllers/PermissionController.php';
 require_once __DIR__ . '/../controllers/SettingsController.php';
 require_once __DIR__ . '/../controllers/FileScannerController.php';
 
+ini_set('display_errors', '0');
 mst_apply_cors();
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
@@ -27,7 +28,7 @@ set_exception_handler(static function (Throwable $exception): never { error_log(
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $path = preg_replace('#^/api/?#', '', $path);
-$segments = array_values(array_filter(explode('/', trim($path, '/')), 'strlen'));
+$segments = array_map('rawurldecode', array_values(array_filter(explode('/', trim($path, '/')), 'strlen')));
 if ($segments === []) Response::success('MST API foundation', ['version' => '0.1.0', 'status' => 'ok']);
 
 $resource = $segments[0] ?? '';

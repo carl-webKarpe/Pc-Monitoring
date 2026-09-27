@@ -3,7 +3,7 @@ USE mst_database;
 INSERT INTO users (id, first_name, last_name, email, username, password_hash, role, status) VALUES
 (1, 'System', 'Administrator', 'superadmin@mst.local', 'superadmin', '$2y$10$xL.8ZVTyfavI1NqmFNG/L.6RUiUvwk6b4ZO8NjOgKTUWJ/X5R45gi', 'Super Admin', 'Active'),
 (2, 'System', 'Administrator', 'admin@mst.local', 'admin', '$2y$10$C/zatTtcoEkyHfHa7eScNeGBoHJCzOq3Fg7L2upQ8PdseDKWAvAvS', 'Admin', 'Active'),
-(3, 'Juan', 'Dela Cruz', 'juan@example.com', 'tenant01', '$2y$10$C/zatTtcoEkyHfHa7eScNeGBoHJCzOq3Fg7L2upQ8PdseDKWAvAvS', 'Tenant', 'Active');
+(3, 'Juan', 'Dela Cruz', 'juan@example.com', 'tenant01', '$2y$12$pxc/eFT/wIzWv4a0HSRE3elaG0qoZilG7yu6qbIbE.Y0CzTGVSXVO', 'Tenant', 'Active');
 
 INSERT INTO computers (id, device_id, hostname, ip_address, operating_system, status, threat_level, cpu_usage, memory_usage, last_seen, agent_status) VALUES
 (1, 'MST-PC-001', 'LAB-PC-01', '192.168.1.20', 'Windows', 'online', 'safe', 24, 42, '5 sec ago', 'connected'),

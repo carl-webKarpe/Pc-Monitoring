@@ -1,6 +1,26 @@
 document.addEventListener('DOMContentLoaded', () => {
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
-  const role = sessionStorage.getItem('mstRole') || 'superadmin';
+  const pathPrefix = window.location.pathname.includes('/management/') ? '../' : '';
+  const isAppPage = Boolean(document.getElementById('sidebar'));
+  const toFrontendRole = (serverRole) => ({ 'Super Admin': 'superadmin', Admin: 'admin' }[serverRole] || null);
+  const redirectToLogin = () => { sessionStorage.removeItem('mstRole'); window.location.replace(`${pathPrefix}login.html`); };
+  const role = sessionStorage.getItem('mstRole');
+
+  // Pages behind the sidebar require a signed-in Super Admin or Admin; the server session is the source of truth.
+  if (isAppPage && !['superadmin', 'admin'].includes(role)) {
+    redirectToLogin();
+    return;
+  }
+  if (isAppPage && window.MSTApi) {
+    window.MSTApi.authMe().then(({ data }) => {
+      const serverRole = toFrontendRole(data.user.role);
+      if (!serverRole) { redirectToLogin(); return; }
+      if (serverRole !== role) { sessionStorage.setItem('mstRole', serverRole); window.location.reload(); }
+    }).catch((error) => {
+      if (error.status === 401) redirectToLogin();
+      // Other failures (API offline) keep the current view; every API request is still authorized server-side.
+    });
+  }
 
   const getNavigation = (selectedRole) => [
     { label: 'MAIN', items: [{ href: 'dashboard.html', icon: 'table-columns', text: 'Dashboard' }] },
@@ -49,18 +69,13 @@ document.addEventListener('DOMContentLoaded', () => {
   window.renderSidebar = renderSidebar;
   renderSidebar();
 
-  if (window.MSTApi && currentPage === 'dashboard.html') {
-    window.MSTApi.authMe().then(({ data }) => {
-      const serverRole = data.user.role === 'Admin' ? 'admin' : 'superadmin';
-      sessionStorage.setItem('mstRole', serverRole);
-      renderSidebar(serverRole);
-    }).catch(() => {
-      // The frontend session remains available when the development API is offline.
-    });
-  }
-
   document.querySelectorAll('a[href="index.html"], a[href="../index.html"]').forEach((link) => {
-    link.addEventListener('click', () => sessionStorage.removeItem('mstRole'));
+    link.addEventListener('click', (event) => {
+      sessionStorage.removeItem('mstRole');
+      if (!window.MSTApi) return;
+      event.preventDefault();
+      window.MSTApi.logout().catch(() => {}).finally(() => { window.location.href = link.href; });
+    });
   });
 
   const restrictedPage = (role === 'admin' && ['admins.html', 'users.html', 'permissions.html'].includes(currentPage)) || (role === 'superadmin' && currentPage === 'file-scanner.html');
@@ -253,7 +268,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       window.MSTApi.apiPost('/auth/login', { username, password })
         .then(({ data }) => {
-          sessionStorage.setItem('mstRole', data.user.role === 'Admin' ? 'admin' : 'superadmin');
+          const signedInRole = toFrontendRole(data.user.role);
+          if (!signedInRole) {
+            alert('Invalid username or password');
+            return;
+          }
+          sessionStorage.setItem('mstRole', signedInRole);
           window.location.href = 'dashboard.html';
         })
         .catch((error) => {

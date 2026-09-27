@@ -30,6 +30,6 @@ The API base URL is `http://localhost:8081/api`. The frontend API helper uses th
 
 ## Authentication and RBAC
 
-Demo accounts are local-development credentials only. Password verification uses `password_hash()` and `password_verify()`, sessions regenerate after login, and passwords/hashes are excluded from API responses. Super Admin is required for users, admins, and permission changes. Both roles can read computers, threats, scans, reports, activity, and settings. Only Admin may reach the future scanner API boundary.
+Demo accounts are local-development credentials only. Password verification uses `password_hash()` and `password_verify()`, sessions regenerate after login, and passwords/hashes are excluded from API responses. Super Admin is required for users, admins, and permission changes. Both roles can read computers, threats, scans, reports, activity, and settings. Only Admin may reach the future scanner API boundary. Only Super Admin and Admin accounts can sign in. `/api/users` manages Tenant accounts only and `/api/admins` manages Admin and Super Admin accounts; the primary Super Admin and the signed-in account cannot be deactivated or removed, and Super Admin accounts cannot be deleted. Duplicate emails or usernames return `409`.
 
 The database schema is in `database/schema.sql` and seed data is in `database/seed.sql`. The MySQL repository can later be extended for agent telemetry without changing the API contract.

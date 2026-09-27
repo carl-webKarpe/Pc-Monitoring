@@ -1461,6 +1461,12 @@ body.login-body {
   text-transform: uppercase;
 }
 
+.scanner-dropzone.hidden,
+.scan-progress.hidden,
+.scan-result.hidden {
+  display: none;
+}
+
 .scan-result {
   opacity: 0;
   transform: translateY(12px);
