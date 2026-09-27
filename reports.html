@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoring System Threat | Reports</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={theme:{extend:{colors:{bg:'#050B14',panel:'#0B1628',panelSoft:'#0F1B2D',panelAlt:'#111F33',cyan:'#00D9FF',blue:'#2563EB',green:'#22C55E',yellow:'#FACC15',red:'#EF4444',text:'#F8FAFC',muted:'#94A3B8'}}}};</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js"></script>
+  </head>
+  <body class="bg-bg text-text antialiased">
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-inner">
+          <div class="brand-header"><div class="brand-mark"><i class="fa-solid fa-shield-halved"></i></div><div class="brand-text"><div class="brand-code">MST</div><div class="brand-title">Monitoring System Threat</div></div></div>
+          <nav class="nav-section">
+            <div class="nav-label uppercase">Dashboard</div>
+            <a href="dashboard.html" class="nav-item"><i class="fa-solid fa-table-columns"></i><span>Dashboard</span></a>
+            <div class="nav-label uppercase">Monitoring</div>
+            <a href="monitoring.html" class="nav-item"><i class="fa-solid fa-network-wired"></i><span>Overview</span></a>
+            <a href="computers.html" class="nav-item"><i class="fa-solid fa-computer"></i><span>Computers</span></a>
+            <a href="monitoring.html#network-visual" class="nav-item"><i class="fa-solid fa-wave-square"></i><span>Network Activity</span></a>
+            <div class="nav-label uppercase">Threat Management</div>
+            <a href="threats.html" class="nav-item"><i class="fa-solid fa-bug"></i><span>Threats</span></a>
+            <a href="file-scanner.html" class="nav-item"><i class="fa-solid fa-file-shield"></i><span>File Scanner</span></a>
+            <a href="scan-history.html" class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i><span>Scan History</span></a>
+            <div class="nav-label uppercase admin-only">User Management</div>
+            <a href="admins.html" class="nav-item admin-only"><i class="fa-solid fa-user-shield"></i><span>Admins</span></a>
+            <a href="users.html" class="nav-item"><i class="fa-solid fa-users"></i><span>Users</span></a>
+            <div class="nav-label uppercase">Reports</div>
+            <a href="reports.html" class="nav-item active"><i class="fa-solid fa-chart-pie"></i><span>Reports</span></a>
+            <a href="activity-logs.html" class="nav-item"><i class="fa-solid fa-list-check"></i><span>Activity Logs</span></a>
+            <div class="nav-label uppercase">System</div>
+            <a href="settings.html" class="nav-item"><i class="fa-solid fa-gear"></i><span>Settings</span></a>
+          </nav>
+          <div class="mt-auto pt-6 border-t border-slate-700/70"><a href="index.html" class="nav-item danger-item"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a></div>
+        </div>
+      </aside>
+      <div class="overlay" id="overlay"></div>
+      <main class="main-panel">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button id="sidebarToggle" class="sidebar-toggle"><i class="fa-solid fa-bars"></i></button>
+            <div>
+              <h1 class="page-title">Reports</h1>
+              <div class="breadcrumb">Reports / Security Overview</div>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="globalSearch" type="text" placeholder="Search reports..." /></div>
+            <div class="user-menu">
+              <div class="avatar">SA</div>
+              <div class="user-meta"><div class="user-name">Super Administrator</div><div class="role-badge super">SUPER ADMIN</div></div>
+              <button class="icon-button small" id="profileToggle"><i class="fa-solid fa-chevron-down"></i></button>
+              <div class="dropdown-panel hidden profile-dropdown" id="profilePanel"><a href="settings.html">Profile settings</a><a href="index.html">Logout</a></div>
+            </div>
+          </div>
+        </header>
+        <div class="page-content">
+          <section class="stats-grid compact-grid">
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Total scanned files</span><span class="metric-icon cyan"><i class="fa-solid fa-file-lines"></i></span></div><div class="metric-value">1,284</div><div class="metric-meta positive">+150 this week</div></article>
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Total threats</span><span class="metric-icon red"><i class="fa-solid fa-bug"></i></span></div><div class="metric-value">7</div><div class="metric-meta neutral">Current snapshot</div></article>
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Resolved threats</span><span class="metric-icon green"><i class="fa-solid fa-check"></i></span></div><div class="metric-value">3</div><div class="metric-meta positive">+1 today</div></article>
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Critical threats</span><span class="metric-icon red"><i class="fa-solid fa-exclamation"></i></span></div><div class="metric-value">2</div><div class="metric-meta negative">Needs review</div></article>
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Online computers</span><span class="metric-icon green"><i class="fa-solid fa-computer"></i></span></div><div class="metric-value">18</div><div class="metric-meta neutral">Healthy</div></article>
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Offline computers</span><span class="metric-icon gray"><i class="fa-solid fa-power-off"></i></span></div><div class="metric-value">6</div><div class="metric-meta neutral">Maintenance</div></article>
+          </section>
+
+          <section class="reports-grid">
+            <article class="card-surface chart-card">
+              <div class="section-header"><div><p class="eyebrow">Threat trends</p><h3>Threats over time</h3></div></div>
+              <div class="sparkline" aria-label="Threats over time chart">
+                <span style="--h: 35%"></span><span style="--h: 42%"></span><span style="--h: 58%"></span><span style="--h: 45%"></span><span style="--h: 60%"></span><span style="--h: 72%"></span><span style="--h: 52%"></span>
+              </div>
+            </article>
+            <article class="card-surface chart-card">
+              <div class="section-header"><div><p class="eyebrow">File analysis</p><h3>Files scanned</h3></div></div>
+              <div class="sparkline blue" aria-label="Files scanned chart">
+                <span style="--h: 42%"></span><span style="--h: 52%"></span><span style="--h: 64%"></span><span style="--h: 58%"></span><span style="--h: 73%"></span><span style="--h: 80%"></span><span style="--h: 92%"></span>
+              </div>
+            </article>
+            <article class="card-surface chart-card">
+              <div class="section-header"><div><p class="eyebrow">Severity mix</p><h3>Threat severity distribution</h3></div></div>
+              <div class="donut-wrap">
+                <div class="donut-chart"><span>7</span></div>
+                <div class="legend-list">
+                  <div><span class="dot red"></span> Critical 2</div>
+                  <div><span class="dot yellow"></span> High 3</div>
+                  <div><span class="dot cyan"></span> Medium 1</div>
+                  <div><span class="dot green"></span> Low 1</div>
+                </div>
+              </div>
+            </article>
+            <article class="card-surface chart-card">
+              <div class="section-header"><div><p class="eyebrow">Endpoint state</p><h3>Computer status</h3></div></div>
+              <div class="status-ring">
+                <div class="ring-segment green" style="--pct: 72%"></div>
+                <div class="ring-segment gray" style="--pct: 28%"></div>
+                <div class="ring-center">24</div>
+              </div>
+            </article>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Monitoring System Threat is a futuristic cybersecurity monitoring platform for monitoring devices, detecting threats, and managing system visibility."
+    />
+    <title>Monitoring System Threat | Home</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              bg: '#050B14',
+              bgSoft: '#08111F',
+              panel: '#0D1726',
+              panelAlt: '#101D30',
+              cyan: '#00D9FF',
+              blue: '#2563EB',
+              green: '#22C55E',
+              red: '#EF4444',
+              text: '#F8FAFC',
+              muted: '#94A3B8'
+            },
+            boxShadow: {
+              cyan: '0 0 0 1px rgba(0, 217, 255, 0.2), 0 18px 40px rgba(0, 217, 255, 0.12)'
+            }
+          }
+        }
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js"></script>
+  </head>
+  <body class="landing-body">
+    <div class="loader" aria-live="polite" aria-label="System loading">
+      <div class="loader-core">
+        <div class="loader-ring ring-outer"></div>
+        <div class="loader-ring ring-inner"></div>
+        <div class="loader-dot"></div>
+        <div class="loader-scan"></div>
+      </div>
+      <div class="loader-text">
+        <span class="loader-kicker">MST</span>
+        <h2>MONITORING SYSTEM THREAT</h2>
+        <p>INITIALIZING SYSTEM...</p>
+        <div class="loader-bar">
+          <span></span>
+        </div>
+        <small>SYSTEM READY</small>
+      </div>
+    </div>
+
+    <div class="bg-grid" aria-hidden="true"></div>
+    <div class="bg-glow glow-one" aria-hidden="true"></div>
+    <div class="bg-glow glow-two" aria-hidden="true"></div>
+
+    <header class="landing-header" id="top">
+      <div class="landing-shell nav-shell">
+        <a href="#home" class="brand-wrap" aria-label="Monitoring System Threat home">
+          <span class="brand-logo" aria-hidden="true">
+            <svg viewBox="0 0 64 64" role="img" aria-label="Cybersecurity shield logo">
+              <defs>
+                <linearGradient id="shieldGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#00D9FF" />
+                  <stop offset="100%" stop-color="#2563EB" />
+                </linearGradient>
+              </defs>
+              <path d="M32 8 L50 14 V31 C50 42 42 52 32 56 C22 52 14 42 14 31 V14 L32 8 Z" fill="none" stroke="url(#shieldGlow)" stroke-width="2.5"/>
+              <path d="M32 18 L38 24 L32 46 L26 24 L32 18 Z" fill="none" stroke="url(#shieldGlow)" stroke-width="2.2"/>
+              <circle cx="32" cy="28" r="7" fill="none" stroke="url(#shieldGlow)" stroke-width="2"/>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <small>MST</small>
+            <strong>Monitoring System Threat</strong>
+          </span>
+        </a>
+
+        <nav class="landing-nav" aria-label="Main navigation">
+          <a href="#home" class="active">Home</a>
+          <a href="#features">Features</a>
+          <a href="#about">About the System</a>
+          <a href="login.html" class="header-login">Login</a>
+        </nav>
+
+        <button class="mobile-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+
+      <div class="mobile-menu" aria-label="Mobile menu">
+        <a href="#home">Home</a>
+        <a href="#features">Features</a>
+        <a href="#about">About the System</a>
+        <a href="login.html">Login</a>
+      </div>
+    </header>
+
+    <main id="home">
+      <section class="landing-shell hero-section">
+        <div class="hero-copy reveal">
+          <div class="kicker">
+            <span class="pulse-dot"></span>
+            ADVANCED NETWORK SECURITY
+          </div>
+
+          <h1>
+            Monitor.<br />
+            Detect.<br />
+            Protect.
+          </h1>
+
+          <h2>Monitoring System Threat</h2>
+
+          <p class="hero-text">
+            A centralized monitoring platform designed to help administrators observe connected computers,
+            identify potential threats, and maintain a safer digital environment.
+          </p>
+
+          <div class="hero-actions">
+            <a href="login.html" class="btn btn-primary">Access Dashboard</a>
+            <a href="#features" class="btn btn-secondary">Explore Features ↓</a>
+          </div>
+
+          <div class="status-inline" aria-label="System status">
+            <span class="status-label">● SYSTEM STATUS</span>
+            <span class="status-value">Operational</span>
+          </div>
+
+          <div class="mini-status-row">
+            <span>Network Monitoring <strong>ACTIVE</strong></span>
+            <span>Threat Detection <strong>ACTIVE</strong></span>
+            <span>Security Scanner <strong>READY</strong></span>
+          </div>
+        </div>
+
+        <div class="hero-visual reveal" aria-label="Futuristic network visualization">
+          <div class="network-shell">
+            <div class="orb orb-main">
+              <span>MST</span>
+            </div>
+
+            <div class="node node-1"><span>PC-01</span><em>ONLINE</em></div>
+            <div class="node node-2"><span>PC-02</span><em>SECURE</em></div>
+            <div class="node node-3"><span>PC-03</span><em>MONITORING</em></div>
+            <div class="node node-4"><span>PC-04</span><em>SECURE</em></div>
+
+            <svg viewBox="0 0 600 420" class="network-svg" aria-hidden="true">
+              <path d="M300 210 L170 120" />
+              <path d="M300 210 L120 285" />
+              <path d="M300 210 L470 120" />
+              <path d="M300 210 L480 285" />
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="landing-shell section-block reveal">
+        <div class="section-heading">
+          <p class="section-label">POWERFUL SECURITY MONITORING</p>
+          <h3>Everything you need to monitor your authorized network environment.</h3>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-shield-halved"></i></div>
+            <h4>Threat Detection</h4>
+            <p>Identify and visualize potential security threats detected within the monitored environment.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-desktop"></i></div>
+            <h4>PC Monitoring</h4>
+            <p>Monitor the status of authorized computers connected to the network.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-network-wired"></i></div>
+            <h4>Network Visibility</h4>
+            <p>View connected devices and their current monitoring status from a centralized dashboard.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+            <h4>File Threat Scanning</h4>
+            <p>Provide a centralized interface for analyzing files and displaying their security status.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-wave-square"></i></div>
+            <h4>Real-Time Activity</h4>
+            <p>View recent monitoring events and security activity through an organized interface.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-chart-column"></i></div>
+            <h4>Security Reports</h4>
+            <p>Generate clear summaries of threats, monitoring activity, and system status.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="about" class="landing-shell about-section reveal">
+        <div class="about-visual">
+          <div class="visual-panel">
+            <div class="visual-panel-header">
+              <span></span><span></span><span></span>
+            </div>
+            <div class="visual-panel-body">
+              <div class="ring-wrap">
+                <div class="ring"></div>
+                <div class="ring small"></div>
+                <div class="ring tiny"></div>
+                <div class="center-point"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="about-copy">
+          <p class="section-label">ABOUT THE SYSTEM</p>
+          <h3>Monitoring System Threat is a centralized monitoring platform designed to provide administrators with a clear view of authorized computers and security events within a network environment.</h3>
+          <p>
+            The system is designed to organize monitoring information, identify potential threats, and present
+            security-related data through an intuitive dashboard.
+          </p>
+
+          <div class="info-panel">
+            <div class="info-row">
+              <span class="info-label">System</span>
+              <span class="info-value">MST</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Purpose</span>
+              <span class="info-value">Network Threat Monitoring</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Platform</span>
+              <span class="info-value">Web-Based</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Access</span>
+              <span class="info-value">Authorized Administrators</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-shell section-block reveal">
+        <div class="section-heading how-it-works-heading">
+          <p class="section-label">HOW IT WORKS</p>
+          <h3>From connected devices to informed response.</h3>
+        </div>
+
+        <div class="timeline">
+          <div class="timeline-step">
+            <span class="step-number">01</span>
+            <h4>CONNECT</h4>
+            <p>Authorized computers communicate with the monitoring platform.</p>
+          </div>
+          <div class="timeline-step">
+            <span class="step-number">02</span>
+            <h4>MONITOR</h4>
+            <p>System activity and monitoring information are collected.</p>
+          </div>
+          <div class="timeline-step">
+            <span class="step-number">03</span>
+            <h4>ANALYZE</h4>
+            <p>Security information is analyzed for potential threats.</p>
+          </div>
+          <div class="timeline-step">
+            <span class="step-number">04</span>
+            <h4>RESPOND</h4>
+            <p>Administrators review alerts and monitoring information.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics-strip reveal">
+        <div class="landing-shell metrics-content">
+          <div class="metrics-copy">
+            <p class="section-label">SECURITY AT A GLANCE</p>
+            <h3>Operational visibility across the monitored environment.</h3>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric-box">
+              <strong class="count" data-target="24">0</strong>
+              <span>MONITORED PCs</span>
+            </div>
+            <div class="metric-box">
+              <strong class="count" data-target="18">0</strong>
+              <span>ONLINE</span>
+            </div>
+            <div class="metric-box">
+              <strong class="count" data-target="1284">0</strong>
+              <span>FILES SCANNED</span>
+            </div>
+            <div class="metric-box">
+              <strong class="count" data-target="7">0</strong>
+              <span>THREATS DETECTED</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-shell radar-section reveal">
+        <div class="radar-panel">
+          <div class="radar-ring radar-ring-1"></div>
+          <div class="radar-ring radar-ring-2"></div>
+          <div class="radar-ring radar-ring-3"></div>
+          <div class="radar-sweep"></div>
+          <div class="radar-dot dot-1"></div>
+          <div class="radar-dot dot-2"></div>
+          <div class="radar-dot dot-3"></div>
+          <div class="radar-dot dot-4"></div>
+          <div class="radar-center">MST</div>
+        </div>
+
+        <div class="radar-copy">
+          <p class="section-label">SYSTEM STATUS</p>
+          <h3>Operational</h3>
+          <p>Live protection layers are active across the current monitoring environment.</p>
+        </div>
+      </section>
+
+      <section class="landing-shell cta-section reveal">
+        <div class="cta-box">
+          <div>
+            <p class="section-label">PROTECT YOUR ENVIRONMENT</p>
+            <h3>Stay Aware.<br />Stay Protected.</h3>
+          </div>
+          <p>
+            Access the Monitoring System Threat dashboard and manage your authorized monitoring environment from one centralized platform.
+          </p>
+          <a href="login.html" class="btn btn-primary btn-wide">Login to Dashboard →</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="landing-footer">
+      <div class="landing-shell footer-shell">
+        <div class="footer-brand">
+          <span class="brand-mini">🛡 MST</span>
+          <span>Monitoring System Threat</span>
+        </div>
+
+        <nav class="footer-links" aria-label="Footer navigation">
+          <a href="#home">Home</a>
+          <a href="#features">Features</a>
+          <a href="#about">About the System</a>
+          <a href="login.html">Login</a>
+        </nav>
+
+        <div class="footer-status">
+          <span>System Status</span>
+          <strong>● Operational</strong>
+        </div>
+      </div>
+
+      <div class="landing-shell footer-bottom">
+        © 2026 Monitoring System Threat. All rights reserved.
+      </div>
+    </footer>
+
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>

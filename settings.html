@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoring System Threat | Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={theme:{extend:{colors:{bg:'#050B14',panel:'#0B1628',panelSoft:'#0F1B2D',panelAlt:'#111F33',cyan:'#00D9FF',blue:'#2563EB',green:'#22C55E',yellow:'#FACC15',red:'#EF4444',text:'#F8FAFC',muted:'#94A3B8'}}}};</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js"></script>
+  </head>
+  <body class="bg-bg text-text antialiased">
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-inner">
+          <div class="brand-header"><div class="brand-mark"><i class="fa-solid fa-shield-halved"></i></div><div class="brand-text"><div class="brand-code">MST</div><div class="brand-title">Monitoring System Threat</div></div></div>
+          <nav class="nav-section">
+            <div class="nav-label uppercase">Dashboard</div>
+            <a href="dashboard.html" class="nav-item"><i class="fa-solid fa-table-columns"></i><span>Dashboard</span></a>
+            <div class="nav-label uppercase">Monitoring</div>
+            <a href="monitoring.html" class="nav-item"><i class="fa-solid fa-network-wired"></i><span>Overview</span></a>
+            <a href="computers.html" class="nav-item"><i class="fa-solid fa-computer"></i><span>Computers</span></a>
+            <a href="monitoring.html#network-visual" class="nav-item"><i class="fa-solid fa-wave-square"></i><span>Network Activity</span></a>
+            <div class="nav-label uppercase">Threat Management</div>
+            <a href="threats.html" class="nav-item"><i class="fa-solid fa-bug"></i><span>Threats</span></a>
+            <a href="file-scanner.html" class="nav-item"><i class="fa-solid fa-file-shield"></i><span>File Scanner</span></a>
+            <a href="scan-history.html" class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i><span>Scan History</span></a>
+            <div class="nav-label uppercase admin-only">User Management</div>
+            <a href="admins.html" class="nav-item admin-only"><i class="fa-solid fa-user-shield"></i><span>Admins</span></a>
+            <a href="users.html" class="nav-item"><i class="fa-solid fa-users"></i><span>Users</span></a>
+            <div class="nav-label uppercase">Reports</div>
+            <a href="reports.html" class="nav-item"><i class="fa-solid fa-chart-pie"></i><span>Reports</span></a>
+            <a href="activity-logs.html" class="nav-item"><i class="fa-solid fa-list-check"></i><span>Activity Logs</span></a>
+            <div class="nav-label uppercase">System</div>
+            <a href="settings.html" class="nav-item active"><i class="fa-solid fa-gear"></i><span>Settings</span></a>
+          </nav>
+          <div class="mt-auto pt-6 border-t border-slate-700/70"><a href="index.html" class="nav-item danger-item"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a></div>
+        </div>
+      </aside>
+      <div class="overlay" id="overlay"></div>
+      <main class="main-panel">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button id="sidebarToggle" class="sidebar-toggle"><i class="fa-solid fa-bars"></i></button>
+            <div>
+              <h1 class="page-title">System Settings</h1>
+              <div class="breadcrumb">System / Settings</div>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="globalSearch" type="text" placeholder="Search settings..." /></div>
+            <div class="user-menu">
+              <div class="avatar">SA</div>
+              <div class="user-meta"><div class="user-name">Super Administrator</div><div class="role-badge super">SUPER ADMIN</div></div>
+              <button class="icon-button small" id="profileToggle"><i class="fa-solid fa-chevron-down"></i></button>
+              <div class="dropdown-panel hidden profile-dropdown" id="profilePanel"><a href="settings.html">Profile settings</a><a href="index.html">Logout</a></div>
+            </div>
+          </div>
+        </header>
+        <div id="settings-page" class="page-content settings-layout">
+          <section class="card-surface">
+            <div class="section-header"><div><p class="eyebrow">General</p><h3>System Configuration</h3></div></div>
+            <div class="settings-form">
+              <div class="field"><label>System Name</label><input type="text" value="Monitoring System Threat" /></div>
+              <div class="field"><label>Time Zone</label><input type="text" value="UTC+8" /></div>
+              <div class="field"><label>Refresh Interval</label><input name="refreshInterval" type="text" value="10 seconds" /></div>
+            </div>
+          </section>
+          <section class="card-surface">
+            <div class="section-header"><div><p class="eyebrow">Monitoring</p><h3>Monitoring Settings</h3></div></div>
+            <div class="settings-form">
+              <div class="toggle-row"><label>Monitoring Status</label><button class="toggle-switch on" type="button" data-setting="monitoringStatus" aria-label="Toggle monitoring status"><span></span></button></div>
+              <div class="field"><label>Computer Heartbeat</label><input name="heartbeat" type="text" value="5 seconds" /></div>
+              <div class="field"><label>Offline Threshold</label><input name="offlineThreshold" type="text" value="60 seconds" /></div>
+              <div class="toggle-row"><label>Threat Notifications</label><button class="toggle-switch on" type="button" data-setting="threatNotifications" aria-label="Toggle threat notifications"><span></span></button></div>
+            </div>
+          </section>
+          <section class="card-surface">
+            <div class="section-header"><div><p class="eyebrow">Security</p><h3>Security Controls</h3></div></div>
+            <div class="settings-form">
+              <div class="field"><label>Session Timeout</label><input name="sessionTimeout" type="text" value="30 minutes" /></div>
+              <div class="field"><label>Login Attempt Limit</label><input name="loginLimit" type="text" value="5 attempts" /></div>
+              <div class="toggle-row"><label>Require Strong Password</label><button class="toggle-switch on" type="button" data-setting="strongPassword" aria-label="Toggle strong password requirement"><span></span></button></div>
+              <div class="toggle-row"><label>Two-Factor Authentication</label><button class="toggle-switch" type="button" data-setting="twoFactor" aria-label="Toggle two-factor authentication"><span></span></button></div>
+            </div>
+          </section>
+          <section class="card-surface">
+            <div class="section-header"><div><p class="eyebrow">Notifications</p><h3>Notification Settings</h3></div></div>
+            <div class="settings-form">
+              <div class="toggle-row"><label>Threat Alerts</label><button class="toggle-switch on" type="button" data-setting="threatAlerts" aria-label="Toggle threat alerts"><span></span></button></div>
+              <div class="toggle-row"><label>Computer Offline Alerts</label><button class="toggle-switch on" type="button" data-setting="offlineAlerts" aria-label="Toggle offline alerts"><span></span></button></div>
+              <div class="toggle-row"><label>Agent Disconnect Alerts</label><button class="toggle-switch on" type="button" data-setting="agentAlerts" aria-label="Toggle agent disconnect alerts"><span></span></button></div>
+              <div class="toggle-row"><label>System Notifications</label><button class="toggle-switch on" type="button" data-setting="systemNotifications" aria-label="Toggle system notifications"><span></span></button></div>
+            </div>
+          </section>
+          <section class="card-surface">
+            <div class="section-header"><div><p class="eyebrow">Interface</p><h3>Interface Settings</h3></div></div>
+            <div class="settings-form">
+              <div class="toggle-row"><label>Compact Mode</label><button class="toggle-switch" type="button" data-setting="compactMode" aria-label="Toggle compact mode"><span></span></button></div>
+              <div class="toggle-row"><label>Animations</label><button class="toggle-switch on" type="button" data-setting="animations" aria-label="Toggle animations"><span></span></button></div>
+              <div class="field"><label>Reduced Motion</label><input type="text" value="System Default" readonly /></div>
+            </div>
+          </section>
+          <div class="settings-actions"><button id="saveSettings" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button></div>
+        </div>
+      </main>
+    </div>
+    <div class="toast" id="settingsToast" role="status"><i class="fa-solid fa-circle-check"></i><span>Settings saved successfully</span></div>
+    <script src="assets/js/app.js"></script>
+    <script src="assets/js/settings.js"></script>
+  </body>
+</html>

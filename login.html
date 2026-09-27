@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoring System Threat | Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              bg: '#050B14',
+              panel: '#0B1628',
+              panelSoft: '#0F1B2D',
+              panelAlt: '#111F33',
+              cyan: '#00D9FF',
+              blue: '#2563EB',
+              green: '#22C55E',
+              yellow: '#FACC15',
+              red: '#EF4444',
+              text: '#F8FAFC',
+              muted: '#94A3B8'
+            },
+            boxShadow: {
+              glow: '0 0 0 1px rgba(0, 217, 255, 0.2), 0 18px 40px rgba(0, 217, 255, 0.12)'
+            }
+          }
+        }
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js"></script>
+  </head>
+  <body class="login-body">
+    <div class="cyber-grid"></div>
+    <div class="network-nodes"></div>
+
+    <main class="min-h-screen flex items-center justify-center px-4 py-10 relative z-10">
+      <div class="login-shell w-full max-w-6xl grid lg:grid-cols-[1.1fr_0.9fr] overflow-hidden rounded-3xl border border-slate-700/70 bg-slate-950/60 backdrop-blur-xl shadow-glow">
+        <section class="login-visual relative p-8 md:p-12 border-b lg:border-b-0 lg:border-r border-slate-700/70">
+          <div class="absolute inset-0 opacity-40" style="background: radial-gradient(circle at 20% 20%, rgba(37,99,235,0.35), transparent 30%), radial-gradient(circle at 80% 30%, rgba(0,217,255,0.2), transparent 20%);"></div>
+          <div class="relative z-10">
+            <div class="flex items-center gap-3 mb-8">
+              <div class="brand-mark"><i class="fa-solid fa-shield-halved"></i></div>
+              <div>
+                <p class="text-[10px] uppercase tracking-[0.45em] text-cyan">MST</p>
+                <h2 class="text-2xl font-bold text-white">Monitoring System Threat</h2>
+              </div>
+            </div>
+
+            <div class="mb-10">
+              <div class="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.25em] text-emerald-300">
+                <span class="status-dot status-online"></span> SYSTEM SECURE
+              </div>
+            </div>
+
+            <div class="space-y-6">
+              <div class="big-title">
+                <span>MONITORING</span>
+                <span>SYSTEM</span>
+                <span>THREAT</span>
+              </div>
+
+              <p class="max-w-md text-slate-300 text-lg">Secure Network Monitoring Platform</p>
+
+              <div class="status-panel mt-8 p-5 rounded-2xl border border-slate-700/70 bg-slate-900/60">
+                <div class="flex items-center justify-between text-sm text-slate-300 mb-4">
+                  <span>System integrity</span>
+                  <span class="text-emerald-300 font-medium">Protected</span>
+                </div>
+                <div class="scanner-line mb-3"></div>
+                <div class="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <div class="text-2xl font-bold text-cyan">24</div>
+                    <div class="text-[10px] uppercase tracking-[0.2em] text-slate-400">Hosts</div>
+                  </div>
+                  <div>
+                    <div class="text-2xl font-bold text-emerald-300">18</div>
+                    <div class="text-[10px] uppercase tracking-[0.2em] text-slate-400">Online</div>
+                  </div>
+                  <div>
+                    <div class="text-2xl font-bold text-red-400">7</div>
+                    <div class="text-[10px] uppercase tracking-[0.2em] text-slate-400">Threats</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="login-panel p-8 md:p-12 flex items-center justify-center">
+          <div class="w-full max-w-md">
+            <div class="mb-8">
+              <div class="text-[10px] uppercase tracking-[0.35em] text-cyan/90 mb-3">Access Portal</div>
+              <h1 class="text-3xl font-bold text-white">Login</h1>
+            </div>
+
+            <form id="loginForm" class="space-y-6">
+              <div>
+                <label for="username" class="form-label">Username or Email</label>
+                <div class="input-wrap">
+                  <i class="fa-solid fa-user"></i>
+                  <input id="username" name="username" type="text" placeholder="Enter username or email" required />
+                </div>
+              </div>
+
+              <div>
+                <label for="password" class="form-label">Password</label>
+                <div class="input-wrap password-wrap">
+                  <i class="fa-solid fa-lock"></i>
+                  <input id="password" name="password" type="password" placeholder="Enter password" required />
+                  <button type="button" class="toggle-password" aria-label="Show password">
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-4">
+                <label class="inline-flex items-center gap-3 text-sm text-slate-300 cursor-pointer">
+                  <input type="checkbox" name="remember" class="form-checkbox" />
+                  <span>Remember Me</span>
+                </label>
+              </div>
+
+              <button type="submit" class="w-full btn-primary">
+                <span>Login</span>
+              </button>
+            </form>
+
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script src="assets/js/app.js"></script>
+    <script src="assets/js/api.js"></script>
+  </body>
+</html>

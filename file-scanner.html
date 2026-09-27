@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoring System Threat | File Scanner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { theme: { extend: { colors: { bg:'#050B14',panel:'#0B1628',panelSoft:'#0F1B2D',panelAlt:'#111F33',cyan:'#00D9FF',blue:'#2563EB',green:'#22C55E',yellow:'#FACC15',red:'#EF4444',text:'#F8FAFC',muted:'#94A3B8' } } } };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js"></script>
+  </head>
+  <body class="bg-bg text-text antialiased">
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-inner">
+          <div class="brand-header">
+            <div class="brand-mark"><i class="fa-solid fa-shield-halved"></i></div>
+            <div class="brand-text">
+              <div class="brand-code">MST</div>
+              <div class="brand-title">Monitoring System Threat</div>
+            </div>
+          </div>
+          <nav class="nav-section">
+            <div class="nav-label uppercase">Dashboard</div>
+            <a href="dashboard.html" class="nav-item"><i class="fa-solid fa-table-columns"></i><span>Dashboard</span></a>
+            <div class="nav-label uppercase">Monitoring</div>
+            <a href="monitoring.html" class="nav-item"><i class="fa-solid fa-network-wired"></i><span>Overview</span></a>
+            <a href="computers.html" class="nav-item"><i class="fa-solid fa-computer"></i><span>Computers</span></a>
+            <a href="monitoring.html#network-visual" class="nav-item"><i class="fa-solid fa-wave-square"></i><span>Network Activity</span></a>
+            <div class="nav-label uppercase">Threat Management</div>
+            <a href="threats.html" class="nav-item"><i class="fa-solid fa-bug"></i><span>Threats</span></a>
+            <a href="file-scanner.html" class="nav-item active"><i class="fa-solid fa-file-shield"></i><span>File Scanner</span></a>
+            <a href="scan-history.html" class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i><span>Scan History</span></a>
+            <div class="nav-label uppercase admin-only">User Management</div>
+            <a href="admins.html" class="nav-item admin-only"><i class="fa-solid fa-user-shield"></i><span>Admins</span></a>
+            <a href="users.html" class="nav-item"><i class="fa-solid fa-users"></i><span>Users</span></a>
+            <div class="nav-label uppercase">Reports</div>
+            <a href="reports.html" class="nav-item"><i class="fa-solid fa-chart-pie"></i><span>Reports</span></a>
+            <a href="activity-logs.html" class="nav-item"><i class="fa-solid fa-list-check"></i><span>Activity Logs</span></a>
+            <div class="nav-label uppercase">System</div>
+            <a href="settings.html" class="nav-item"><i class="fa-solid fa-gear"></i><span>Settings</span></a>
+          </nav>
+          <div class="mt-auto pt-6 border-t border-slate-700/70">
+            <a href="index.html" class="nav-item danger-item"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+          </div>
+        </div>
+      </aside>
+      <div class="overlay" id="overlay"></div>
+      <main class="main-panel">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button id="sidebarToggle" class="sidebar-toggle"><i class="fa-solid fa-bars"></i></button>
+            <div>
+              <h1 class="page-title">File Threat Scanner</h1>
+              <div class="breadcrumb">Threat Management / File Scanner</div>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="globalSearch" type="text" placeholder="Search files, threats, computers..." /></div>
+            <div class="notification-wrapper">
+              <button class="icon-button" id="notificationsToggle" aria-label="Notifications"><i class="fa-solid fa-bell"></i><span class="badge-dot">1</span></button>
+              <div class="dropdown-panel hidden" id="notificationsPanel"><div class="dropdown-header">Notifications</div><div class="notification-list"><div class="notification-item danger"><div class="noti-icon"><i class="fa-solid fa-circle-exclamation"></i></div><div><div class="noti-title">Critical threat detected</div><div class="noti-meta">Scanner queue</div></div></div></div></div>
+            </div>
+            <div class="user-menu">
+              <div class="avatar">SA</div>
+              <div class="user-meta"><div class="user-name">Super Administrator</div><div class="role-badge super">SUPER ADMIN</div></div>
+              <button class="icon-button small" id="profileToggle"><i class="fa-solid fa-chevron-down"></i></button>
+              <div class="dropdown-panel hidden profile-dropdown" id="profilePanel"><a href="settings.html">Profile settings</a><a href="index.html">Logout</a></div>
+            </div>
+          </div>
+        </header>
+        <div class="page-content">
+          <section id="scanner-page" class="card-surface scanner-shell">
+            <div class="scanner-dropzone" id="dropZone">
+              <div class="drop-icon"><i class="fa-solid fa-shield-virus"></i></div>
+              <div class="drop-title">Drag & Drop File Here</div>
+              <div class="divider-or"><span>or</span></div>
+              <label class="btn-primary file-input-label">
+                <input type="file" id="fileInput" hidden />
+                Select File
+              </label>
+              <div class="scan-meta">
+                Supported file types: .exe, .dll, .zip, .pdf, .docx<br />
+                Maximum size: Demo value
+              </div>
+            </div>
+
+            <div class="scan-progress hidden" id="scanProgress">
+              <h4>ANALYZING FILE</h4>
+              <div class="scan-bar"><span></span></div>
+              <div class="scan-steps">
+                <p>Calculating file hash...</p>
+                <p>Checking reputation...</p>
+                <p>Analyzing security status...</p>
+              </div>
+              <div class="scan-wait">Please wait...</div>
+            </div>
+
+            <div class="scan-result hidden" id="scanResult">
+              <div class="scan-result-header">
+                <div class="scan-result-icon"><i class="fa-solid fa-check"></i></div>
+                <div><h4>SCAN RESULT</h4><span>Security analysis completed</span></div>
+              </div>
+              <div class="result-grid scan-result-grid">
+                <div class="scan-result-item"><span>FILE</span><strong id="resultFileName">example.exe</strong></div>
+                <div class="scan-result-item"><span>SHA-256</span><strong id="resultHash">xxxxxxxxxxxxxxxx</strong></div>
+                <div class="scan-result-item"><span>STATUS</span><strong class="safe-status">● SAFE</strong></div>
+                <div class="scan-result-item"><span>THREAT DETECTION</span><strong id="resultDetection">0 / 70</strong></div>
+                <div class="scan-result-item"><span>SCAN COMPLETED</span><strong id="resultTime">Just now</strong></div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script src="assets/js/app.js"></script>
+    <script src="assets/js/scanner.js"></script>
+  </body>
+</html>

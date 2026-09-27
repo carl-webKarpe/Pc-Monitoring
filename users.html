@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoring System Threat | User Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { theme: { extend: { colors: { bg:'#050B14',panel:'#0B1628',panelSoft:'#0F1B2D',panelAlt:'#111F33',cyan:'#00D9FF',blue:'#2563EB',green:'#22C55E',yellow:'#FACC15',red:'#EF4444',text:'#F8FAFC',muted:'#94A3B8' } } } };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js"></script>
+  </head>
+  <body class="bg-bg text-text antialiased">
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-inner">
+          <div class="brand-header"><div class="brand-mark"><i class="fa-solid fa-shield-halved"></i></div><div class="brand-text"><div class="brand-code">MST</div><div class="brand-title">Monitoring System Threat</div></div></div>
+          <nav class="nav-section">
+            <div class="nav-label uppercase">Dashboard</div>
+            <a href="dashboard.html" class="nav-item"><i class="fa-solid fa-table-columns"></i><span>Dashboard</span></a>
+            <div class="nav-label uppercase">Monitoring</div>
+            <a href="monitoring.html" class="nav-item"><i class="fa-solid fa-network-wired"></i><span>Overview</span></a>
+            <a href="computers.html" class="nav-item"><i class="fa-solid fa-computer"></i><span>Computers</span></a>
+            <a href="monitoring.html#network-visual" class="nav-item"><i class="fa-solid fa-wave-square"></i><span>Network Activity</span></a>
+            <div class="nav-label uppercase">Threat Management</div>
+            <a href="threats.html" class="nav-item"><i class="fa-solid fa-bug"></i><span>Threats</span></a>
+            <a href="file-scanner.html" class="nav-item"><i class="fa-solid fa-file-shield"></i><span>File Scanner</span></a>
+            <a href="scan-history.html" class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i><span>Scan History</span></a>
+            <div class="nav-label uppercase admin-only">User Management</div>
+            <a href="admins.html" class="nav-item admin-only"><i class="fa-solid fa-user-shield"></i><span>Admins</span></a>
+            <a href="users.html" class="nav-item active"><i class="fa-solid fa-users"></i><span>Users</span></a>
+            <div class="nav-label uppercase">Reports</div>
+            <a href="reports.html" class="nav-item"><i class="fa-solid fa-chart-pie"></i><span>Reports</span></a>
+            <a href="activity-logs.html" class="nav-item"><i class="fa-solid fa-list-check"></i><span>Activity Logs</span></a>
+            <div class="nav-label uppercase">System</div>
+            <a href="settings.html" class="nav-item"><i class="fa-solid fa-gear"></i><span>Settings</span></a>
+          </nav>
+          <div class="mt-auto pt-6 border-t border-slate-700/70"><a href="index.html" class="nav-item danger-item"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a></div>
+        </div>
+      </aside>
+      <div class="overlay" id="overlay"></div>
+      <main class="main-panel">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button id="sidebarToggle" class="sidebar-toggle"><i class="fa-solid fa-bars"></i></button>
+            <div>
+              <h1 class="page-title">User Management</h1>
+              <div class="breadcrumb">Users / Accounts</div>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="globalSearch" type="text" placeholder="Search users..." /></div>
+            <div class="user-menu">
+              <div class="avatar">SA</div>
+              <div class="user-meta"><div class="user-name">Super Administrator</div><div class="role-badge super">SUPER ADMIN</div></div>
+              <button class="icon-button small" id="profileToggle"><i class="fa-solid fa-chevron-down"></i></button>
+              <div class="dropdown-panel hidden profile-dropdown" id="profilePanel"><a href="settings.html">Profile settings</a><a href="index.html">Logout</a></div>
+            </div>
+          </div>
+        </header>
+        <div class="page-content">
+          <section class="card-surface">
+            <div class="section-header justify-between"><div><p class="eyebrow">Authorized users</p><h3>User Management</h3></div><button class="btn-primary small open-modal" data-modal="userModal">+ Add User</button></div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>User</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
+                <tbody>
+                  <tr><td>Alex Martin</td><td>alexm</td><td>alex@mst.local</td><td>Analyst</td><td><span class="status-pill online">Active</span></td><td>10 min ago</td><td><div class="action-links"><button class="link-button">View</button><button class="link-button">Edit</button><button class="link-button danger">Disable</button></div></td></tr>
+                  <tr><td>Rosa Diaz</td><td>rosad</td><td>rosa@mst.local</td><td>Engineer</td><td><span class="status-pill online">Active</span></td><td>26 min ago</td><td><div class="action-links"><button class="link-button">View</button><button class="link-button">Edit</button><button class="link-button danger">Disable</button></div></td></tr>
+                  <tr><td>Chris Long</td><td>chrisl</td><td>chris@mst.local</td><td>Operator</td><td><span class="status-pill offline">Inactive</span></td><td>2 days ago</td><td><div class="action-links"><button class="link-button">View</button><button class="link-button">Edit</button><button class="link-button danger">Disable</button></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal hidden" id="userModal">
+      <div class="modal-backdrop" data-close-modal></div>
+      <div class="modal-dialog">
+        <div class="modal-header"><h3>Add User</h3><button class="icon-button small" data-close-modal><i class="fa-solid fa-xmark"></i></button></div>
+        <form class="modal-form">
+          <div class="form-grid">
+            <div><label>Full Name</label><input type="text" placeholder="Enter full name" /></div>
+            <div><label>Username</label><input type="text" placeholder="Username" /></div>
+            <div><label>Email</label><input type="email" placeholder="name@domain.com" /></div>
+            <div><label>Role</label><select><option>Analyst</option><option>Engineer</option><option>Operator</option></select></div>
+            <div class="full-span"><label>Status</label><select><option>Active</option><option>Inactive</option></select></div>
+          </div>
+          <div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button type="submit" class="btn-primary">Create User</button></div>
+        </form>
+      </div>
+    </div>
+
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>

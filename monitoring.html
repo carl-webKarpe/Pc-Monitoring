@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoring System Threat | Monitoring</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              bg: '#050B14',
+              panel: '#0B1628',
+              panelSoft: '#0F1B2D',
+              panelAlt: '#111F33',
+              cyan: '#00D9FF',
+              blue: '#2563EB',
+              green: '#22C55E',
+              yellow: '#FACC15',
+              red: '#EF4444',
+              text: '#F8FAFC',
+              muted: '#94A3B8'
+            }
+          }
+        }
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js"></script>
+  </head>
+  <body class="bg-bg text-text antialiased">
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-inner">
+          <div class="brand-header">
+            <div class="brand-mark"><i class="fa-solid fa-shield-halved"></i></div>
+            <div class="brand-text">
+              <div class="brand-code">MST</div>
+              <div class="brand-title">Monitoring System Threat</div>
+            </div>
+          </div>
+
+          <nav class="nav-section">
+            <div class="nav-label uppercase">Dashboard</div>
+            <a href="dashboard.html" class="nav-item"><i class="fa-solid fa-table-columns"></i><span>Dashboard</span></a>
+
+            <div class="nav-label uppercase">Monitoring</div>
+            <a href="monitoring.html" class="nav-item active"><i class="fa-solid fa-network-wired"></i><span>Overview</span></a>
+            <a href="computers.html" class="nav-item"><i class="fa-solid fa-computer"></i><span>Computers</span></a>
+            <a href="monitoring.html#network-visual" class="nav-item"><i class="fa-solid fa-wave-square"></i><span>Network Activity</span></a>
+
+            <div class="nav-label uppercase">Threat Management</div>
+            <a href="threats.html" class="nav-item"><i class="fa-solid fa-bug"></i><span>Threats</span></a>
+            <a href="file-scanner.html" class="nav-item"><i class="fa-solid fa-file-shield"></i><span>File Scanner</span></a>
+            <a href="scan-history.html" class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i><span>Scan History</span></a>
+
+            <div class="nav-label uppercase admin-only">User Management</div>
+            <a href="admins.html" class="nav-item admin-only"><i class="fa-solid fa-user-shield"></i><span>Admins</span></a>
+            <a href="users.html" class="nav-item"><i class="fa-solid fa-users"></i><span>Users</span></a>
+
+            <div class="nav-label uppercase">Reports</div>
+            <a href="reports.html" class="nav-item"><i class="fa-solid fa-chart-pie"></i><span>Reports</span></a>
+            <a href="activity-logs.html" class="nav-item"><i class="fa-solid fa-list-check"></i><span>Activity Logs</span></a>
+
+            <div class="nav-label uppercase">System</div>
+            <a href="settings.html" class="nav-item"><i class="fa-solid fa-gear"></i><span>Settings</span></a>
+          </nav>
+
+          <div class="mt-auto pt-6 border-t border-slate-700/70">
+            <a href="index.html" class="nav-item danger-item"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+          </div>
+        </div>
+      </aside>
+
+      <div class="overlay" id="overlay"></div>
+
+      <main class="main-panel">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button id="sidebarToggle" class="sidebar-toggle"><i class="fa-solid fa-bars"></i></button>
+            <div>
+              <h1 class="page-title">Monitoring</h1>
+              <div class="breadcrumb">Monitoring / Overview</div>
+            </div>
+          </div>
+
+          <div class="topbar-right">
+            <div class="search-wrap">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input id="globalSearch" type="text" placeholder="Search computers, threats, users..." />
+            </div>
+            <div class="notification-wrapper">
+              <button class="icon-button" id="notificationsToggle" aria-label="Notifications">
+                <i class="fa-solid fa-bell"></i>
+                <span class="badge-dot">2</span>
+              </button>
+              <div class="dropdown-panel hidden" id="notificationsPanel">
+                <div class="dropdown-header">Notifications</div>
+                <div class="notification-list">
+                  <div class="notification-item danger"><div class="noti-icon"><i class="fa-solid fa-circle-exclamation"></i></div><div><div class="noti-title">Threat activity</div><div class="noti-meta">LAB-PC-04</div></div></div>
+                  <div class="notification-item warning"><div class="noti-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><div><div class="noti-title">Suspicious file</div><div class="noti-meta">LAB-PC-02</div></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="user-menu">
+              <div class="avatar">SA</div>
+              <div class="user-meta">
+                <div class="user-name">Super Administrator</div>
+                <div class="role-badge super">SUPER ADMIN</div>
+              </div>
+              <button class="icon-button small" id="profileToggle"><i class="fa-solid fa-chevron-down"></i></button>
+              <div class="dropdown-panel hidden profile-dropdown" id="profilePanel">
+                <a href="settings.html">Profile settings</a>
+                <a href="index.html">Logout</a>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div class="page-content">
+          <section class="card-surface mb-6" id="network-visual">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Live topology</p>
+                <h3>Network Visualization</h3>
+              </div>
+            </div>
+            <div class="network-visual large-network" aria-label="Futuristic network visualization">
+              <div class="node server"><span>SERVER</span></div>
+              <div class="node pc pc-1"><span>PC-01</span><small>192.168.1.20</small></div>
+              <div class="node pc pc-2"><span>PC-02</span><small>192.168.1.21</small></div>
+              <div class="node pc pc-3"><span>PC-03</span><small>192.168.1.22</small></div>
+              <div class="node pc pc-4"><span>PC-04</span><small>192.168.1.23</small></div>
+            </div>
+          </section>
+
+          <section class="card-surface">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Connected devices</p>
+                <h3>Live Network Monitoring</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>PC Name</th>
+                    <th>IP Address</th>
+                    <th>Status</th>
+                    <th>Last Seen</th>
+                    <th>CPU</th>
+                    <th>Memory</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>LAB-PC-01</td>
+                    <td>192.168.1.20</td>
+                    <td><span class="status-pill online">● ONLINE</span></td>
+                    <td>Just now</td>
+                    <td>24%</td>
+                    <td>36%</td>
+                  </tr>
+                  <tr>
+                    <td>LAB-PC-02</td>
+                    <td>192.168.1.21</td>
+                    <td><span class="status-pill warning">● WARNING</span></td>
+                    <td>10 sec ago</td>
+                    <td>58%</td>
+                    <td>62%</td>
+                  </tr>
+                  <tr>
+                    <td>LAB-PC-03</td>
+                    <td>192.168.1.22</td>
+                    <td><span class="status-pill offline">● OFFLINE</span></td>
+                    <td>8 min ago</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td>LAB-PC-04</td>
+                    <td>192.168.1.23</td>
+                    <td><span class="status-pill danger">● THREAT</span></td>
+                    <td>2 min ago</td>
+                    <td>92%</td>
+                    <td>87%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script src="assets/js/app.js"></script>
+    <script src="assets/js/monitoring.js"></script>
+  </body>
+</html>

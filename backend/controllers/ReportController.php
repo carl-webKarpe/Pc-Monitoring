@@ -1,0 +1,1 @@
+<?php require_once __DIR__ . '/ResourceController.php'; final class ReportController { public static function index(string $method): never { if ($method !== 'GET') Response::error('Method not allowed', 'METHOD_NOT_ALLOWED', 405); RoleMiddleware::allow(['Super Admin', 'Admin']); Response::success('Request successful', MySQLRepository::reports()); } }

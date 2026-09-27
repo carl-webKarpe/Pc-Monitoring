@@ -1,0 +1,39 @@
+<?php
+declare(strict_types=1);
+
+const MST_DEMO_ACCOUNTS = [
+    'superadmin' => ['id' => 1, 'username' => 'superadmin', 'name' => 'System Administrator', 'role' => 'Super Admin'],
+    'admin' => ['id' => 2, 'username' => 'admin', 'name' => 'Administrator', 'role' => 'Admin'],
+];
+
+function mst_env(): array
+{
+    static $values;
+    if ($values !== null) return $values;
+    $values = [];
+    $file = dirname(__DIR__, 2) . '/.env';
+    if (is_readable($file)) foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) { if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue; [$key, $value] = explode('=', $line, 2); $values[trim($key)] = trim($value); }
+    return $values;
+}
+
+function mst_config(): array
+{
+    return [
+        'frontend_origin' => getenv('FRONTEND_ORIGIN') ?: (mst_env()['FRONTEND_ORIGIN'] ?? 'http://localhost:8000'),
+        'db_host' => getenv('DB_HOST') ?: (mst_env()['DB_HOST'] ?? '127.0.0.1'),
+        'db_port' => getenv('DB_PORT') ?: (mst_env()['DB_PORT'] ?? '3306'),
+        'db_name' => getenv('DB_DATABASE') ?: (mst_env()['DB_DATABASE'] ?? getenv('DB_NAME') ?: (mst_env()['DB_NAME'] ?? 'mst_database')),
+        'db_user' => getenv('DB_USERNAME') ?: (mst_env()['DB_USERNAME'] ?? getenv('DB_USER') ?: (mst_env()['DB_USER'] ?? 'root')),
+        'db_password' => getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : (mst_env()['DB_PASSWORD'] ?? ''),
+        'session_name' => 'mst_session',
+    ];
+}
+
+function mst_start_session(): void
+{
+    if (session_status() === PHP_SESSION_ACTIVE) return;
+    $config = mst_config();
+    session_name($config['session_name']);
+    session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off']);
+    session_start();
+}
