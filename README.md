@@ -178,6 +178,10 @@ mysql -u root -p mst_database < database/seed.sql
 
 For a complete reset and reseed from the project root, run `mysql -u root -p < database/reset.sql` in the MySQL command-line client. `SOURCE` commands in the reset script are MySQL-client commands; do not paste that file into phpMyAdmin. This deletes all local MST data, so use it only during development. For phpMyAdmin, import `schema.sql` first and then `seed.sql` separately.
 
+To run the project, start the API with `php -S localhost:8081 backend/public/index.php` and serve the site with `php -S localhost:8000` from the project root, then open `http://localhost:8000/login.html`. Check the database connection at `http://localhost:8081/api/health/database`. Full API details are in [backend/README.md](backend/README.md).
+
+The dashboard, Computer Monitoring, Threats, Scan History, Reports, Activity Logs, Settings, User/Admin Management and Permissions pages now read MySQL data through the API. If the API cannot be reached, those pages fall back to their built-in demo data and show an "API unavailable" notice.
+
 The seed stores bcrypt password hashes generated with `password_hash()`, never plaintext passwords. Computer, CPU/memory, agent, threat, and scan values remain demonstration data; the Python Agent, LAN monitoring, VirusTotal, and real file scanning are future work.
 
 ## Phase 4 - Super Admin Management

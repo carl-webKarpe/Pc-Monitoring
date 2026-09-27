@@ -1,3 +1,60 @@
+// Shared helpers for pages that render API data.
+function mstEscape(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
+}
+
+// MySQL DATETIME/TIMESTAMP values ("2026-09-15 22:42:00") are shown in the browser's local time.
+function mstParseDate(value) {
+  if (!value) return null;
+  const date = new Date(String(value).replace(' ', 'T'));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function mstFormatDate(value) {
+  const date = mstParseDate(value);
+  if (!date) return '—';
+  return `${date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })} - ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function mstTimeAgo(value) {
+  const date = mstParseDate(value);
+  if (!date) return '—';
+  const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+  if (seconds < 60) return 'Just now';
+  const units = [['day', 86400], ['hour', 3600], ['min', 60]];
+  const [unit, size] = units.find(([, length]) => seconds >= length);
+  const amount = Math.floor(seconds / size);
+  return `${amount} ${unit}${amount === 1 || unit === 'min' ? '' : 's'} ago`;
+}
+
+// Reuses a page's existing .toast element when it has one, otherwise creates one with the same styling.
+function showMSTToast(message, toastId) {
+  let toast = toastId ? document.getElementById(toastId) : null;
+  if (!toast) {
+    toast = document.getElementById('mstToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'mstToast';
+      toast.className = 'toast';
+      toast.setAttribute('role', 'status');
+      toast.innerHTML = '<i class="fa-solid fa-circle-info"></i><span></span>';
+      document.body.appendChild(toast);
+    }
+  }
+  const text = toast.querySelector('span');
+  if (text) text.textContent = message;
+  toast.classList.add('show');
+  window.clearTimeout(toast.mstTimer);
+  toast.mstTimer = window.setTimeout(() => toast.classList.remove('show'), 3200);
+}
+
+function mstApiErrorMessage(error, fallback = 'Unable to load data from the server.') {
+  if (!error || !error.status) return 'The MST API is not reachable. Start the PHP backend and try again.';
+  if (error.status === 403) return error.payload?.error?.code === 'FORBIDDEN' ? 'You do not have permission to access this data.' : (error.message || 'This action is not allowed.');
+  if (error.status >= 500) return fallback;
+  return error.message || fallback;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
   const pathPrefix = window.location.pathname.includes('/management/') ? '../' : '';

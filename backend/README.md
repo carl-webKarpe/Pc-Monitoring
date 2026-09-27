@@ -1,35 +1,68 @@
-# MST PHP API Foundation
+# MST PHP API
 
-Phase 7 uses a PHP REST API with PHP sessions, PDO, MySQL persistence, and server-side RBAC. Computer telemetry and security scan records remain demonstration data. It does not include a Python Agent, LAN monitoring, a real scanner, VirusTotal, or production deployment configuration.
+Phase 7 connects the PHP REST API to MySQL (`mst_database`) through PDO, with PHP sessions and server-side RBAC. Computer, threat and scan records in the database are **demonstration data**; there is no Python Agent, LAN monitoring, real scanner, VirusTotal integration, or production deployment configuration yet.
+
+## Configure
+
+Copy `.env.example` to `.env` in the project root and set your local MySQL password. `.env` is ignored by Git — never commit it.
+
+```text
+APP_ENV=development
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=mst_database
+DB_USERNAME=root
+DB_PASSWORD=your-local-password
+FRONTEND_ORIGIN=http://localhost:8000,http://127.0.0.1:8000
+```
+
+The older names `DB_NAME` and `DB_USER` are still accepted. The PDO connection lives in `backend/config/Database.php` (exceptions on, associative fetch, native prepared statements).
 
 ## Run locally
 
-From the project root:
+From the project root, in two terminals:
 
 ```powershell
-php -S localhost:8081 backend/public/index.php
+php -S localhost:8081 backend/public/index.php   # API  -> http://localhost:8081/api
+php -S localhost:8000                            # site -> http://localhost:8000/login.html
 ```
 
-The API base URL is `http://localhost:8081/api`. The frontend API helper uses this URL by default and sends session cookies.
+Check the database connection (development only; disabled when `APP_ENV=production`):
+
+```text
+http://localhost:8081/api/health/database
+```
+
+If the API cannot be reached at all, pages fall back to their built-in demo data and show an "API unavailable" notice.
 
 ## Endpoints
 
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-- `GET /api/auth/me`
-- `GET|POST /api/users`, `GET|PUT|DELETE /api/users/{id}`
-- `GET|POST /api/admins`, `GET|PUT|DELETE /api/admins/{id}`
-- `GET /api/computers`, `GET /api/computers/{id}`
-- `GET /api/threats`, `GET /api/threats/{id}`, `PUT /api/threats/{id}/status`
-- `GET /api/scans`, `GET /api/scans/{id}`
-- `GET /api/reports`
-- `GET /api/activity`
-- `GET /api/permissions`, `PUT /api/permissions/{role}`
-- `GET|PUT /api/settings`
-- `POST /api/file-scanner` returns a Phase 6 not-implemented response for Admins and rejects Super Admins.
+| Method | URL | Module (RBAC) |
+|---|---|---|
+| GET | `/api/health/database` | public, development only |
+| POST | `/api/auth/login` (username **or** email), `/api/auth/logout` | public |
+| GET | `/api/auth/me` | signed in |
+| GET | `/api/dashboard` | dashboard |
+| GET | `/api/computers`, `/api/computers/{id}` | computer_monitoring |
+| GET | `/api/threats` (`?severity=&status=&computerId=`), `/api/threats/{id}` | threats |
+| PUT | `/api/threats/{id}/status` | threats |
+| GET | `/api/scans` (`?status=&type=&computerId=`), `/api/scans/{id}` | scan_history |
+| GET | `/api/reports` | reports |
+| GET | `/api/activity` | activity_logs |
+| GET, PUT | `/api/settings` (allowlisted keys only) | settings |
+| GET, POST / GET, PUT, DELETE | `/api/users`, `/api/users/{id}` (Tenant accounts) | user_management |
+| GET, POST / GET, PUT, DELETE | `/api/admins`, `/api/admins/{id}` (Admin and Super Admin accounts) | admin_management |
+| GET / PUT | `/api/permissions`, `/api/permissions/{role}` | permissions |
+| POST | `/api/file-scanner` (not implemented yet → 501) | file_scanner |
+
+List endpoints accept `?limit=` (1–500) and `?offset=`. Responses use `{ "success": true, "message": "...", "data": ... }` or `{ "success": false, "message": "...", "error": { "code": "..." } }` with 200/201/400/401/403/404/405/409/422/500 status codes. Database errors are logged server-side and never returned to the client.
 
 ## Authentication and RBAC
 
-Demo accounts are local-development credentials only. Password verification uses `password_hash()` and `password_verify()`, sessions regenerate after login, and passwords/hashes are excluded from API responses. Super Admin is required for users, admins, and permission changes. Both roles can read computers, threats, scans, reports, activity, and settings. Only Admin may reach the future scanner API boundary. Only Super Admin and Admin accounts can sign in. `/api/users` manages Tenant accounts only and `/api/admins` manages Admin and Super Admin accounts; the primary Super Admin and the signed-in account cannot be deactivated or removed, and Super Admin accounts cannot be deleted. Duplicate emails or usernames return `409`.
+Only Active Super Admin and Admin accounts can sign in. Passwords are stored with `password_hash()` and checked with `password_verify()`. The account is re-read from the database on every request, so deactivating an account or changing its role takes effect immediately.
 
-The database schema is in `database/schema.sql` and seed data is in `database/seed.sql`. The MySQL repository can later be extended for agent telemetry without changing the API contract.
+Every endpoint checks a module. The fixed MST role policy in `backend/middleware/RoleMiddleware.php` is authoritative (Super Admin: everything except File Scanner; Admin: everything except User Management, Admin Management and Permissions). The `permissions` table is then consulted: a row with `allowed = 0` revokes that module, and a missing row falls back to the policy. The database can narrow access but can never grant a module the policy forbids, and Super Admin cannot remove its own access to Permissions.
+
+`/api/users` manages Tenant accounts only and `/api/admins` manages Admin and Super Admin accounts. The primary Super Admin and the signed-in account cannot be deactivated or removed, and Super Admin accounts cannot be deleted. Duplicate emails or usernames return `409`.
+
+Logins (successful and failed), logouts, account changes, permission changes, threat status changes and settings changes are written to `activity_logs` with the client IP. Only field names are logged — never passwords or other secrets, and never the text typed into the login form.

@@ -6,10 +6,24 @@ const monitoredComputers = [
   { id: 'MST-PC-005', name: 'LAB-PC-05', ip: '192.168.1.24', mac: 'AA:BB:CC:DD:EE:05', status: 'online', threatLevel: 'safe', cpu: 31, memory: 46, disk: 55, network: '10.1 Mbps', agentVersion: '1.0.0', lastSeen: '7 sec ago', threats: 0, files: 142, events: 1, scan: '25 min ago' }
 ];
 
-async function fetchComputers() { return Promise.resolve(monitoredComputers); }
-async function fetchComputerDetails(id) { return Promise.resolve(monitoredComputers.find((computer) => computer.id === id)); }
+// Demo records are only shown when the MST API cannot be reached (see MSTApi.apiGetOrDemo).
+let computerRows = [];
+let computerDataIsDemo = false;
+
+// Maps a MySQL-backed /api/computers record onto the structure the existing UI already renders.
+// Values the database does not store yet (MAC, disk, network, agent version) are filled by the future Python Agent phase.
+function fromApiComputer(computer) {
+  return { dbId: computer.id, id: computer.deviceId, name: computer.hostname, ip: computer.ipAddress, mac: null, os: computer.operatingSystem, status: computer.status, threatLevel: computer.threatLevel, cpu: computer.cpuUsage ?? null, memory: computer.memoryUsage ?? null, disk: null, network: null, agentVersion: null, agentStatus: computer.agentStatus, lastSeen: computer.lastSeen, threats: Number(computer.activeThreats || 0), files: Number(computer.scanCount || 0), events: null, scan: computer.lastScanAt ? mstTimeAgo(computer.lastScanAt) : 'No scans recorded' };
+}
+
+async function fetchComputers() {
+  const { data, demo } = await window.MSTApi.apiGetOrDemo('/computers', monitoredComputers);
+  computerDataIsDemo = demo;
+  return demo ? data : data.map(fromApiComputer);
+}
+async function fetchComputerDetails(id) { return (computerRows.length ? computerRows : await fetchComputers()).find((computer) => computer.id === id); }
 async function fetchNetworkStatus() { return Promise.resolve({ status: 'connected', connection: 'Ethernet', gateway: '192.168.1.1' }); }
-async function fetchAgentStatus(id) { return Promise.resolve({ id, status: 'connected', version: '1.0.0', heartbeat: '5 seconds ago' }); }
+async function fetchAgentStatus(id) { const computer = await fetchComputerDetails(id); return { id, status: computer?.agentStatus || 'unknown' }; }
 
 const statusText = { online: 'ONLINE', offline: 'OFFLINE', warning: 'WARNING', threat: 'THREAT' };
 const threatText = { safe: 'SAFE', warning: 'WARNING', high: 'HIGH', unknown: 'UNKNOWN' };
@@ -17,11 +31,11 @@ const threatText = { safe: 'SAFE', warning: 'WARNING', high: 'HIGH', unknown: 'U
 function renderComputerStats(computers) {
   const stats = [
     ['TOTAL COMPUTERS', computers.length, 'Monitored devices', 'fa-desktop', 'cyan'],
-    ['ONLINE', computers.filter((computer) => computer.status === 'online').length, '75% online', 'fa-circle-check', 'green'],
+    ['ONLINE', computers.filter((computer) => computer.status === 'online').length, `${computers.length ? Math.round((computers.filter((computer) => computer.status === 'online').length / computers.length) * 100) : 0}% online`, 'fa-circle-check', 'green'],
     ['OFFLINE', computers.filter((computer) => computer.status === 'offline').length, 'Requires attention', 'fa-circle-minus', 'gray'],
     ['WARNING', computers.filter((computer) => computer.status === 'warning').length, 'Needs review', 'fa-triangle-exclamation', 'yellow'],
     ['THREAT DETECTED', computers.filter((computer) => computer.status === 'threat').length, 'Active threats', 'fa-shield-halved', 'red'],
-    ['RECENTLY CONNECTED', 3, 'Last 24 hours', 'fa-plug-circle-check', 'cyan']
+    ['RECENTLY CONNECTED', computers.filter((computer) => (computer.agentStatus || (computer.status === 'offline' ? 'disconnected' : 'connected')) === 'connected').length, 'Agent connected', 'fa-plug-circle-check', 'cyan']
   ];
   const target = document.querySelector('#computers-page #computerStats');
   if (!target) return;
@@ -38,8 +52,9 @@ function renderComputers(computers) {
   const empty = document.querySelector('#computers-page #computerEmpty');
   if (!body || !empty) return;
   empty.classList.toggle('hidden', computers.length > 0);
-  body.innerHTML = computers.map((computer) => `<tr><td><i class="fa-solid fa-desktop table-icon"></i><strong>${computer.name}</strong></td><td>${computer.id}</td><td>${computer.ip}</td><td><span class="status-pill ${computer.status}">● ${statusText[computer.status]}</span></td><td><span class="computer-threat ${computer.threatLevel}">${threatText[computer.threatLevel]}</span></td><td>${computer.cpu === null ? '—' : `${computer.cpu}%`}</td><td>${computer.memory === null ? '—' : `${computer.memory}%`}</td><td>${computer.lastSeen}</td><td><button class="link-button view-computer" data-computer-id="${computer.id}">View</button></td></tr>`).join('');
-  document.querySelector('#computers-page #computerCount').textContent = computers.length ? `Showing 1-${computers.length} of ${monitoredComputers.length} computers` : 'Showing 0 computers';
+  const esc = mstEscape;
+  body.innerHTML = computers.map((computer) => `<tr><td><i class="fa-solid fa-desktop table-icon"></i><strong>${esc(computer.name)}</strong></td><td>${esc(computer.id)}</td><td>${esc(computer.ip)}</td><td><span class="status-pill ${esc(computer.status)}">● ${esc(statusText[computer.status] || computer.status)}</span></td><td><span class="computer-threat ${esc(computer.threatLevel)}">${esc(threatText[computer.threatLevel] || computer.threatLevel)}</span></td><td>${computer.cpu === null ? '—' : `${esc(computer.cpu)}%`}</td><td>${computer.memory === null ? '—' : `${esc(computer.memory)}%`}</td><td>${esc(computer.lastSeen)}</td><td><button class="link-button view-computer" data-computer-id="${esc(computer.id)}">View</button></td></tr>`).join('');
+  document.querySelector('#computers-page #computerCount').textContent = computers.length ? `Showing 1-${computers.length} of ${computerRows.length} computers${computerDataIsDemo ? ' (demo data)' : ''}` : 'Showing 0 computers';
   body.querySelectorAll('.view-computer').forEach((button) => button.addEventListener('click', () => showComputerDetails(button.dataset.computerId)));
 }
 
@@ -50,52 +65,69 @@ function renderNetworkTopology() {
 }
 
 function showComputerDetails(id) {
-  const computer = monitoredComputers.find((item) => item.id === id);
+  const computer = computerRows.find((item) => item.id === id);
   const modal = document.getElementById('computerDetailsModal');
   const content = document.getElementById('computerDetailContent');
   const title = document.getElementById('computerDetailTitle');
   if (!computer || !modal || !content || !title) return;
   title.textContent = computer.name;
   const offline = computer.status === 'offline';
-  content.innerHTML = `<div class="detail-grid"><div class="detail-section"><h4>DEVICE INFORMATION</h4><p><span>Computer Name</span><strong>${computer.name}</strong></p><p><span>Device ID</span><strong>${computer.id}</strong></p><p><span>IP Address</span><strong>${computer.ip}</strong></p><p><span>MAC Address</span><strong>${computer.mac}</strong></p><p><span>Operating System</span><strong>Windows</strong></p><p><span>Agent Version</span><strong>${computer.agentVersion}</strong></p><p><span>Status</span><strong class="status-pill ${computer.status}">● ${statusText[computer.status]}</strong></p><p><span>Last Seen</span><strong>${computer.lastSeen}</strong></p></div><div class="detail-section"><h4>SYSTEM RESOURCES</h4>${resourceBar('CPU Usage', computer.cpu)}${resourceBar('Memory Usage', computer.memory)}${resourceBar('Disk Usage', computer.disk)}<p><span>Network</span><strong>${computer.network}</strong></p><h4>SECURITY STATUS</h4><p><span>Threat Level</span><strong class="computer-threat ${computer.threatLevel}">${threatText[computer.threatLevel]}</strong></p><p><span>Active Threats</span><strong>${computer.threats}</strong></p><p><span>Files Scanned</span><strong>${computer.files}</strong></p><p><span>Suspicious Events</span><strong>${computer.events}</strong></p><p><span>Last Security Scan</span><strong>${computer.scan}</strong></p></div></div><div class="detail-bottom"><div><h4>NETWORK INFORMATION</h4><p>Gateway <strong>192.168.1.1</strong></p><p>Connection <strong>Ethernet</strong></p><p>Network status <strong class="success-text">● Connected</strong></p></div><div><h4>AGENT STATUS</h4><p>Agent status <strong class="${offline ? 'danger-text' : 'success-text'}">● ${offline ? 'DISCONNECTED' : 'CONNECTED'}</strong></p><p>Last heartbeat <strong>${offline ? 'Unavailable' : computer.lastSeen}</strong></p><p>Upload / Download <strong>2.4 / ${computer.network}</strong></p></div></div><div class="detail-activity"><h4>RECENT ACTIVITY</h4><p><time>10:42 PM</time> Agent heartbeat received</p><p><time>10:41 PM</time> File scan completed</p><p><time>10:39 PM</time> Network activity recorded</p><p><time>10:35 PM</time> System information updated</p></div>${computer.status === 'threat' ? '<a class="btn-primary detail-threat-link" href="threats.html">View Threats</a>' : ''}`;
+  const esc = mstEscape;
+  const unavailable = (value) => (value === null || value === undefined || value === '' ? 'Unavailable' : value);
+  const agentConnected = (computer.agentStatus || (offline ? 'disconnected' : 'connected')) === 'connected';
+  // Recent activity, gateway and throughput are demo-only until the Python Agent phase reports them.
+  const activity = computerDataIsDemo ? '<p><time>10:42 PM</time> Agent heartbeat received</p><p><time>10:41 PM</time> File scan completed</p><p><time>10:39 PM</time> Network activity recorded</p><p><time>10:35 PM</time> System information updated</p>' : '<p><time>—</time> Agent activity will be recorded once the monitoring agent is connected (future phase).</p>';
+  content.innerHTML = `<div class="detail-grid"><div class="detail-section"><h4>DEVICE INFORMATION</h4><p><span>Computer Name</span><strong>${esc(computer.name)}</strong></p><p><span>Device ID</span><strong>${esc(computer.id)}</strong></p><p><span>IP Address</span><strong>${esc(computer.ip)}</strong></p><p><span>MAC Address</span><strong>${esc(unavailable(computer.mac))}</strong></p><p><span>Operating System</span><strong>${esc(computer.os || 'Windows')}</strong></p><p><span>Agent Version</span><strong>${esc(unavailable(computer.agentVersion))}</strong></p><p><span>Status</span><strong class="status-pill ${esc(computer.status)}">● ${esc(statusText[computer.status] || computer.status)}</strong></p><p><span>Last Seen</span><strong>${esc(computer.lastSeen)}</strong></p></div><div class="detail-section"><h4>SYSTEM RESOURCES</h4>${resourceBar('CPU Usage', computer.cpu)}${resourceBar('Memory Usage', computer.memory)}${resourceBar('Disk Usage', computer.disk)}<p><span>Network</span><strong>${esc(unavailable(computer.network))}</strong></p><h4>SECURITY STATUS</h4><p><span>Threat Level</span><strong class="computer-threat ${esc(computer.threatLevel)}">${esc(threatText[computer.threatLevel] || computer.threatLevel)}</strong></p><p><span>Active Threats</span><strong>${esc(computer.threats)}</strong></p><p><span>Files Scanned</span><strong>${esc(computer.files)}</strong></p><p><span>Suspicious Events</span><strong>${esc(unavailable(computer.events))}</strong></p><p><span>Last Security Scan</span><strong>${esc(computer.scan)}</strong></p></div></div><div class="detail-bottom"><div><h4>NETWORK INFORMATION</h4><p>Gateway <strong>${computerDataIsDemo ? '192.168.1.1' : 'Unavailable'}</strong></p><p>Connection <strong>${computerDataIsDemo ? 'Ethernet' : 'Unavailable'}</strong></p><p>Network status <strong class="${offline ? 'danger-text' : 'success-text'}">● ${offline ? 'Disconnected' : 'Connected'}</strong></p></div><div><h4>AGENT STATUS</h4><p>Agent status <strong class="${agentConnected ? 'success-text' : 'danger-text'}">● ${esc((computer.agentStatus || (agentConnected ? 'connected' : 'disconnected')).toUpperCase())}</strong></p><p>Last heartbeat <strong>${offline ? 'Unavailable' : esc(computer.lastSeen)}</strong></p><p>Upload / Download <strong>${computerDataIsDemo ? `2.4 / ${esc(computer.network)}` : 'Unavailable'}</strong></p></div></div><div class="detail-activity"><h4>RECENT ACTIVITY</h4>${activity}</div>${computer.status === 'threat' ? '<a class="btn-primary detail-threat-link" href="threats.html">View Threats</a>' : ''}`;
   modal.classList.remove('hidden');
 }
 
-function resourceBar(label, value) { return `<div class="resource-bar"><div><span>${label}</span><strong>${value === null ? 'Unavailable' : `${value}%`}</strong></div><div class="resource-track"><span style="width:${value || 0}%"></span></div></div>`; }
+function resourceBar(label, value) { const percent = value === null || value === undefined ? null : Math.max(0, Math.min(100, Number(value) || 0)); return `<div class="resource-bar"><div><span>${label}</span><strong>${percent === null ? 'Unavailable' : `${percent}%`}</strong></div><div class="resource-track"><span style="width:${percent || 0}%"></span></div></div>`; }
 
 function filterComputers() {
   const query = document.getElementById('computerSearch')?.value.toLowerCase().trim() || '';
   const status = document.getElementById('statusFilter')?.value || 'all';
   const threat = document.getElementById('threatFilter')?.value || 'all';
   const sort = document.getElementById('sortFilter')?.value || 'name';
-  const filtered = monitoredComputers.filter((computer) => `${computer.name} ${computer.id} ${computer.ip}`.toLowerCase().includes(query) && (status === 'all' || computer.status === status) && (threat === 'all' || computer.threatLevel === threat)).sort((first, second) => sort === 'threats' ? second.threats - first.threats : sort === 'status' ? first.status.localeCompare(second.status) : first.name.localeCompare(second.name));
+  const filtered = computerRows.filter((computer) => `${computer.name} ${computer.id} ${computer.ip}`.toLowerCase().includes(query) && (status === 'all' || computer.status === status) && (threat === 'all' || computer.threatLevel === threat)).sort((first, second) => sort === 'threats' ? second.threats - first.threats : sort === 'status' ? first.status.localeCompare(second.status) : first.name.localeCompare(second.name));
   renderComputers(filtered);
 }
 
-function refreshMonitoring() {
+async function loadComputers() {
+  try {
+    computerRows = await fetchComputers();
+  } catch (error) {
+    computerRows = [];
+    showMSTToast(mstApiErrorMessage(error, 'Unable to load computers from the database.'), 'computerToast');
+  }
+  renderComputerStats(computerRows);
+  filterComputers();
+  if (computerDataIsDemo) showMSTToast('API unavailable — showing demo computer data', 'computerToast');
+  const lastUpdated = document.getElementById('computerLastUpdated');
+  if (lastUpdated) lastUpdated.textContent = 'Just now';
+}
+
+async function refreshMonitoring() {
   const button = document.getElementById('refreshComputers');
-  const toast = document.getElementById('computerToast');
   if (!button) return;
   button.disabled = true;
   button.innerHTML = '<i class="fa-solid fa-spinner"></i> Refreshing';
-  window.setTimeout(() => { button.disabled = false; button.innerHTML = '<i class="fa-solid fa-rotate"></i> Refresh'; document.getElementById('computerLastUpdated').textContent = 'Just now'; toast?.classList.add('show'); window.setTimeout(() => toast?.classList.remove('show'), 2800); }, 900);
-}
-
-function updateDemoMetrics() {
-  monitoredComputers.forEach((computer) => { if (computer.cpu !== null) computer.cpu = Math.max(10, Math.min(95, computer.cpu + Math.round((Math.random() - 0.5) * 6))); if (computer.memory !== null) computer.memory = Math.max(20, Math.min(95, computer.memory + Math.round((Math.random() - 0.5) * 4))); });
+  await loadComputers();
+  button.disabled = false;
+  button.innerHTML = '<i class="fa-solid fa-rotate"></i> Refresh';
+  if (!computerDataIsDemo) showMSTToast('Monitoring data updated', 'computerToast');
 }
 
 function initializeComputerMonitoring() {
   const page = document.getElementById('computers-page');
   if (!page) return;
-  renderComputerStats(monitoredComputers);
-  renderComputers(monitoredComputers);
+  const body = document.querySelector('#computers-page #computerTableBody');
+  if (body) body.innerHTML = '<tr><td colspan="9">Loading computers…</td></tr>';
   renderNetworkTopology();
   ['computerSearch', 'statusFilter', 'threatFilter', 'sortFilter'].forEach((id) => document.getElementById(id)?.addEventListener(id === 'computerSearch' ? 'input' : 'change', filterComputers));
   document.getElementById('refreshComputers')?.addEventListener('click', refreshMonitoring);
   document.getElementById('emptyRefresh')?.addEventListener('click', filterComputers);
   document.querySelectorAll('#computers-page [data-close-modal]').forEach((button) => button.addEventListener('click', () => document.getElementById('computerDetailsModal')?.classList.add('hidden')));
-  window.setInterval(() => { updateDemoMetrics(); filterComputers(); }, 7000);
+  loadComputers();
 }
 
 document.addEventListener('DOMContentLoaded', initializeComputerMonitoring);

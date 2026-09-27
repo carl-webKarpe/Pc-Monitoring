@@ -1,1 +1,14 @@
-<?php require_once __DIR__ . '/ResourceController.php'; final class ComputerController { public static function index(string $method, ?string $id = null): never { if ($method !== 'GET') Response::error('Method not allowed', 'METHOD_NOT_ALLOWED', 405); if ($id === null) ResourceController::list('computers', ['Super Admin', 'Admin']); ResourceController::show('computers', $id, ['Super Admin', 'Admin']); } }
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/ResourceController.php';
+
+final class ComputerController
+{
+    public static function index(string $method, ?string $id = null): never
+    {
+        if ($method !== 'GET') Response::error('Method not allowed', 'METHOD_NOT_ALLOWED', 405);
+        if ($id === null) ResourceController::list('computers');
+        ResourceController::show('computers', $id);
+    }
+}
