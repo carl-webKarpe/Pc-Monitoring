@@ -7,6 +7,8 @@ A small Python program that runs on each **authorized** lab computer. It:
 - watches **only the folders you list** (by default Downloads, Desktop, Documents) and reports **new** and **deleted** files: name, location, size, time and SHA-256 fingerprint;
 - keeps events in a local queue (`mst_agent_queue.db`) when the server cannot be reached and sends them later.
 
+When an Admin clicks **Scan** on the Detected Files page, the agent re-checks that file on this PC and reports the result (see `backend/README.md`, Phase 11). It only scans files inside its watch folders.
+
 It does **not** upload file contents, record keystrokes, capture the screen, control the computer, or hide itself. It runs as a normal visible program and writes everything it does to `mst_agent.log`.
 
 ## 1. On the MST server (admin laptop) — once per lab PC
@@ -68,6 +70,8 @@ To try the file watcher without a server: `python run_agent.py --offline` prints
 | `MST server not reachable` | Check the admin laptop IP in `server_url`, that the API runs with `0.0.0.0:8081`, and that Windows Firewall on the laptop allows port 8081 (Phase 10). Events are kept and sent later. |
 | `Device not authorized` | `device_id`/`device_token` do not match. Run `register-agent.php` again and paste the new token. |
 | `Watch folder does not exist and is skipped` | Fix the path in `watch_folders`. |
+| The PC still shows demo values ("10 sec ago", MAC *Unavailable*) | The agent has not connected: run `python run_agent.py --check` on the PC and read the message; make sure the same `device_id` was registered with `register-agent.php`. Then press Ctrl+F5 on the dashboard. |
+| A downloaded file does not appear | The agent must be running (`python run_agent.py`, window open) and the file must be in a folder listed in `watch_folders`. Check `mst_agent.log`. Temporary files (`.crdownload`, `~$...`) are ignored on purpose. |
 
 ## Tests (developers)
 

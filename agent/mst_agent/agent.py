@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from pathlib import Path
 
 from . import VERSION
 from .api_client import ApiClient, ApiError
 from .config import AgentConfig
 from .file_monitor import FileMonitor
 from .outbox import Outbox
+from .scanner import ScanError, scan_file
 from .system_info import heartbeat_payload
 
 log = logging.getLogger("mst_agent")
@@ -27,6 +29,7 @@ class Agent:
         self.monitor = FileMonitor(config, self._queue_event)
         self._stop = threading.Event()
         self._server_reachable: bool | None = None
+        self._unsent_results: list[dict] = []  # scan results waiting for the server
 
     # ---- events -----------------------------------------------------------
     def _queue_event(self, event: dict) -> None:
@@ -50,6 +53,39 @@ class Agent:
             self.outbox.remove([row_id for row_id, _ in batch])
             delivered += len(batch)
             self._report_connection(True)
+        return delivered
+
+    # ---- scans requested by the admin ------------------------------------------
+    def process_scan_jobs(self) -> int:
+        """Runs pending scans for this PC and reports the results. Returns how many results were delivered."""
+        try:
+            jobs = self.client.scan_jobs()
+        except ApiError as error:
+            self._report_connection(False, error)
+            return 0
+        for job in jobs:
+            path = Path(str(job.get("filePath", "")))
+            log.info("Scan #%s requested by MST admin: %s", job.get("scanId"), path)
+            result = {"scanId": job.get("scanId")}
+            try:
+                result.update(scan_file(path, self.monitor.watched or self.config.watch_folders, job.get("expectedSha256"), self.config.max_hash_bytes), outcome="completed")
+                log.info("Scan #%s finished: %d finding(s)", job.get("scanId"), len(result["findings"]))
+            except ScanError as error:
+                result.update(outcome="failed", error=str(error), durationMs=0)
+                log.warning("Scan #%s failed: %s", job.get("scanId"), error)
+            except Exception:  # never let one scan stop the agent
+                log.exception("Scan #%s failed unexpectedly", job.get("scanId"))
+                result.update(outcome="failed", error="Unexpected error while scanning", durationMs=0)
+            self._unsent_results.append(result)
+        delivered = 0
+        while self._unsent_results:
+            try:
+                self.client.send_scan_result(self._unsent_results[0])
+            except ApiError as error:
+                self._report_connection(False, error)
+                break
+            self._unsent_results.pop(0)
+            delivered += 1
         return delivered
 
     # ---- heartbeat --------------------------------------------------------
@@ -87,6 +123,7 @@ class Agent:
             while not self._stop.wait(self.config.send_interval_seconds):
                 if not self.offline:
                     self.flush()
+                    self.process_scan_jobs()
         finally:
             self.stop()
 

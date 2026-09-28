@@ -24,3 +24,6 @@ INSERT INTO permissions (role, module, allowed) VALUES
 ('Admin','dashboard',1),('Admin','computer_monitoring',1),('Admin','network',1),('Admin','threats',1),('Admin','file_scanner',1),('Admin','scan_history',1),('Admin','reports',1),('Admin','activity_logs',1),('Admin','user_management',0),('Admin','admin_management',0),('Admin','permissions',0),('Admin','settings',1);
 
 INSERT INTO settings (category, setting_key, setting_value) VALUES ('system','systemName','Monitoring System Threat'),('system','monitoringStatus','1'),('system','refreshInterval','10 seconds');
+
+-- Harmless EICAR anti-virus test file hash, used to demonstrate a THREAT scan result safely.
+INSERT INTO hash_blocklist (sha256, name, severity, source) VALUES ('275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f', 'EICAR anti-virus test file', 'CRITICAL', 'EICAR');

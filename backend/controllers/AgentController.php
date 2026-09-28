@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../helpers/Response.php';
 require_once __DIR__ . '/../helpers/Validation.php';
+require_once __DIR__ . '/../helpers/FileRisk.php';
 require_once __DIR__ . '/../middleware/AgentAuth.php';
 require_once __DIR__ . '/../repositories/MySQLRepository.php';
 
@@ -18,6 +19,8 @@ final class AgentController
         if ((int)($_SERVER['CONTENT_LENGTH'] ?? 0) > self::MAX_BODY_BYTES) Response::error('Request too large', 'PAYLOAD_TOO_LARGE', 413);
         if ($action === 'heartbeat') self::heartbeat();
         if ($action === 'events') self::events();
+        if ($action === 'scan-jobs') self::scanJobs();
+        if ($action === 'scan-results') self::scanResult();
         Response::error('Endpoint not found', 'NOT_FOUND', 404);
     }
 
@@ -71,6 +74,36 @@ final class AgentController
         if ($rejected > 0) error_log("Agent {$computer['deviceId']}: rejected $rejected invalid file event(s)");
         // Invalid events are reported but not retried, so one bad event cannot block the agent's queue.
         Response::success('Events received', ['accepted' => $accepted, 'duplicates' => $duplicates, 'rejected' => $rejected]);
+    }
+
+    // Scans the admin requested for files on this computer. The agent only scans paths inside its own watch folders.
+    private static function scanJobs(): never
+    {
+        $computer = AgentAuth::requireDevice();
+        Response::success('Scan jobs', ['jobs' => MySQLRepository::scanJobs((int)$computer['id'])]);
+    }
+
+    private static function scanResult(): never
+    {
+        $computer = AgentAuth::requireDevice();
+        $data = Validation::body();
+        $scanId = $data['scanId'] ?? null;
+        $outcome = $data['outcome'] ?? null;
+        $sha256 = $data['sha256'] ?? null;
+        $durationMs = $data['durationMs'] ?? 0;
+        $errors = [];
+        if (!is_int($scanId) || $scanId < 1) $errors['scanId'] = 'scanId is required';
+        if (!in_array($outcome, ['completed', 'failed'], true)) $errors['outcome'] = 'outcome must be completed or failed';
+        if ($sha256 !== null && (!is_string($sha256) || !preg_match('/^[0-9a-f]{64}$/i', $sha256))) $errors['sha256'] = 'sha256 is invalid';
+        if (!is_int($durationMs) || $durationMs < 0) $errors['durationMs'] = 'durationMs is invalid';
+        if ($errors !== []) Validation::fail($errors);
+        $scan = MySQLRepository::findPendingScan($scanId, (int)$computer['id']);
+        // Already finished (e.g. a retried request) or not this computer's scan: acknowledge without changes.
+        if (!$scan) Response::success('Scan result ignored', ['scanId' => $scanId, 'ignored' => true]);
+        $error = is_string($data['error'] ?? null) && preg_match('/^.{0,200}/us', preg_replace('/[\x00-\x1F\x7F<>]/', '', $data['error']) ?? '', $match) ? $match[0] : 'Scan failed on the computer';
+        $verdict = $outcome === 'completed' ? FileRisk::verdict(FileRisk::cleanFindings($data['findings'] ?? []), MySQLRepository::blocklistMatch($sha256 ?? $scan['fileHash'])) : null;
+        $result = MySQLRepository::completeScan($scan, $verdict, $sha256 === null ? null : strtolower($sha256), $durationMs, $verdict ? null : $error);
+        Response::success('Scan result recorded', ['scanId' => $scanId, 'status' => $result['status'] ?? null, 'riskLevel' => $result['riskLevel'] ?? null]);
     }
 
     private static function cleanEvent(array $event): ?array

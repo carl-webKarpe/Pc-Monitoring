@@ -111,6 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ] },
     { label: 'THREAT MANAGEMENT', items: [
       { href: 'threats.html', icon: 'shield-halved', text: 'Threats' },
+      { href: 'files.html', icon: 'file-circle-exclamation', text: 'Detected Files' },
       ...(selectedRole === 'admin' ? [{ href: 'file-scanner.html', icon: 'magnifying-glass', text: 'File Scanner' }] : []),
       { href: 'scan-history.html', icon: 'clock-rotate-left', text: 'Scan History' }
     ] },

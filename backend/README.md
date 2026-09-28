@@ -54,8 +54,10 @@ If the API cannot be reached at all, pages fall back to their built-in demo data
 | GET, POST / GET, PUT, DELETE | `/api/admins`, `/api/admins/{id}` (Admin and Super Admin accounts) | admin_management |
 | GET / PUT | `/api/permissions`, `/api/permissions/{role}` | permissions |
 | POST | `/api/file-scanner` (not implemented yet → 501) | file_scanner |
-| GET | `/api/file-events` (`?computerId=&type=&status=`) | computer_monitoring |
-| POST | `/api/agent/heartbeat`, `/api/agent/events` | lab-PC agent (device token, no user session) |
+| GET | `/api/file-events` (`?computerId=&type=&status=`), `/api/file-events/{id}` (with scan history) | computer_monitoring |
+| PUT | `/api/file-events/{id}` (`classification`: Normal/Confidential, `status`: Reviewed) | computer_monitoring |
+| POST | `/api/file-events/{id}/scan` (asks the agent on that PC to scan the file) | file_scanner (Admin only) |
+| POST | `/api/agent/heartbeat`, `/api/agent/events`, `/api/agent/scan-jobs`, `/api/agent/scan-results` | lab-PC agent (device token, no user session) |
 
 List endpoints accept `?limit=` (1–500) and `?offset=`. Responses use `{ "success": true, "message": "...", "data": ... }` or `{ "success": false, "message": "...", "error": { "code": "..." } }` with 200/201/400/401/403/404/405/409/422/500 status codes. Database errors are logged server-side and never returned to the client.
 
@@ -77,4 +79,13 @@ Lab PCs run the Python agent in `agent/` (see `agent/README.md`). Apply `databas
 - For lab PCs to reach the API, start it on all interfaces: `php -S 0.0.0.0:8081 backend/public/index.php` (the website can stay on `localhost:8000`).
 - Agents authenticate with `X-Device-Id` + `Authorization: Bearer <token>`. Heartbeats update the computer's status, resources and `last_heartbeat_at`; a computer whose last heartbeat is older than the **Offline Threshold** setting (minimum 45 s) is shown offline.
 - `/api/agent/events` accepts up to 100 events per request. Invalid events are skipped and counted; repeated events (same `uid`) are ignored, so agent retries are safe.
+
+## Detected files and on-PC scanning (Phase 11)
+
+Apply `database/migrations/phase11_files.sql` once (after `phase9_agent.sql`). The **Detected Files** page lists every file the agents report with its activity (new/deleted), size, date, risk level and classification.
+
+- **Classification:** MST suggests *Possibly confidential* when the file name or folder contains words such as payroll, salary, grades, exam, password or confidential; an admin confirms **Confidential** or **Normal**.
+- **Risk before a scan** comes from the file name only (double extension such as `grades.pdf.exe` → High, programs/scripts → Low).
+- **Scan:** an Admin clicks *Scan*; the agent on that PC picks the job up within a few seconds, re-hashes the file and checks it (double extension, a Windows program disguised as another file type, programs downloaded from the internet via the Windows "Mark of the Web"). The server then checks the SHA-256 against `hash_blocklist` and stores the verdict in `scans`: Critical/High → **THREAT** (a threat record is created and the computer is marked *threat*), Medium → **WARNING**, Low/Safe → **SAFE**. Files are never uploaded; the agent only scans paths inside its watch folders.
+- `hash_blocklist` starts with the harmless **EICAR anti-virus test file**, so a THREAT result can be demonstrated safely. Add known-bad hashes in MySQL Workbench: `INSERT INTO hash_blocklist (sha256, name, severity, source) VALUES ('<sha256>', '<name>', 'HIGH', 'Manual');`. A VirusTotal hash lookup can be added later.
 

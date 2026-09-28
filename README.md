@@ -219,3 +219,7 @@ Each authorized lab PC runs the Python agent in [`agent/`](agent/README.md). It 
 
 Existing databases: run `database/migrations/phase9_agent.sql` once. Register each PC with `php backend/tools/register-agent.php <DEVICE-ID> <HOSTNAME> [IP]`. Scanning detected files is Phase 11.
 
+## Phase 11 - Detected Files and On-PC Scanning
+
+The **Detected Files** page (Threat Management) shows every file the agents report, with activity, size, date, risk level and classification (MST suggests *Possibly confidential*; the admin confirms Confidential or Normal). An Admin can request a scan; the agent on that PC checks the file locally, the server adds a hash-blocklist check, and the result is stored in `scans` (THREAT results also create a threat). Super Admin can view and classify files but, as with the File Scanner, cannot scan. Existing databases: run `database/migrations/phase11_files.sql` once after `phase9_agent.sql`.
+

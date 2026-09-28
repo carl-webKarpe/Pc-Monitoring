@@ -11,7 +11,7 @@ final class ResourceController
     public const MODULES = ['users' => 'user_management', 'admins' => 'admin_management', 'computers' => 'computer_monitoring', 'threats' => 'threats', 'scans' => 'scan_history'];
     public const THREAT_SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'SAFE'];
     public const THREAT_STATUSES = ['Detected', 'Investigating', 'Quarantined', 'Resolved', 'Ignored'];
-    public const SCAN_STATUSES = ['SAFE', 'THREAT', 'WARNING', 'FAILED'];
+    public const SCAN_STATUSES = ['PENDING', 'SAFE', 'THREAT', 'WARNING', 'FAILED'];
     public const SCAN_TYPES = ['File Scan', 'Quick Scan', 'Security Scan', 'Network Scan'];
     private const ACCOUNT_LABELS = ['users' => ['USER', 'user'], 'admins' => ['ADMIN', 'admin']];
 

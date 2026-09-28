@@ -132,3 +132,46 @@ def test_monitor_reports_new_downloaded_and_deleted_files(tmp_path, monkeypatch)
         monitor.stop()
     assert not [event for event in events if "crdownload" in event["fileName"] or event["fileName"].startswith("~$")]
     assert len([event for event in events if event["type"] == "created" and event["fileName"] == "notes.txt"]) == 1
+
+
+# ---- on-PC scan (Phase 11) --------------------------------------------------------------------------
+from mst_agent.scanner import ScanError, scan_file  # noqa: E402
+
+
+def rules(result):
+    return {finding["rule"]: finding["severity"] for finding in result["findings"]}
+
+
+def test_scan_plain_document_is_clean(tmp_path):
+    target = tmp_path / "report.pdf"
+    target.write_bytes(b"%PDF-1.7 demo")
+    result = scan_file(target, [tmp_path], hashlib.sha256(b"%PDF-1.7 demo").hexdigest(), 10_000)
+    assert result["findings"] == [] and result["fileSize"] == 13
+
+
+def test_scan_flags_double_extension_and_disguised_program(tmp_path):
+    fake_pdf = tmp_path / "grades.pdf.exe"
+    fake_pdf.write_bytes(b"MZ" + b"\0" * 100)
+    assert rules(scan_file(fake_pdf, [tmp_path], None, 10_000)) == {"double_extension": "HIGH", "executable_type": "LOW"}
+    renamed_program = tmp_path / "photo.jpg"
+    renamed_program.write_bytes(b"MZ" + b"\0" * 100)
+    assert rules(scan_file(renamed_program, [tmp_path], None, 10_000)) == {"disguised_executable": "HIGH"}
+
+
+def test_scan_reports_changed_content(tmp_path):
+    target = tmp_path / "notes.txt"
+    target.write_text("new content", encoding="utf-8")
+    assert rules(scan_file(target, [tmp_path], "0" * 64, 10_000)) == {"hash_changed": "INFO"}
+
+
+def test_scan_refuses_missing_files_and_paths_outside_watch_folders(tmp_path):
+    watched, outside = tmp_path / "watched", tmp_path / "outside"
+    watched.mkdir(); outside.mkdir()
+    secret = outside / "secret.txt"
+    secret.write_text("x", encoding="utf-8")
+    with pytest.raises(ScanError):
+        scan_file(secret, [watched], None, 10_000)
+    with pytest.raises(ScanError):
+        scan_file(watched / "gone.exe", [watched], None, 10_000)
+    with pytest.raises(ScanError):
+        scan_file(watched / ".." / "outside" / "secret.txt", [watched], None, 10_000)

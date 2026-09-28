@@ -27,6 +27,7 @@ STABLE_CHECKS = 2          # size must be unchanged for this many consecutive ch
 CHECK_INTERVAL = 1.0       # seconds between size checks
 MAX_WAIT_SECONDS = 300     # give up waiting for very slow downloads after 5 minutes
 HASH_CHUNK = 1024 * 1024
+WORKERS = 4                # new files are checked in parallel so a burst of files is not delayed
 
 
 def utc_now() -> str:
@@ -60,7 +61,7 @@ class FileMonitor:
         self._pending_lock = threading.Lock()
         self._work: queue.Queue[tuple[Path, str] | None] = queue.Queue()
         self._observer = Observer()
-        self._worker = threading.Thread(target=self._process_created, name="mst-file-worker", daemon=True)
+        self._workers = [threading.Thread(target=self._process_created, name=f"mst-file-worker-{number}", daemon=True) for number in range(WORKERS)]
         self.watched: list[Path] = []
 
     # ---- filtering -------------------------------------------------------
@@ -83,15 +84,18 @@ class FileMonitor:
                 self.watched.append(folder)
             else:
                 log.warning("Watch folder does not exist and is skipped: %s", folder)
-        self._worker.start()
+        for worker in self._workers:
+            worker.start()
         self._observer.start()
         return self.watched
 
     def stop(self) -> None:
         self._observer.stop()
         self._observer.join(timeout=5)
-        self._work.put(None)
-        self._worker.join(timeout=5)
+        for worker in self._workers:
+            self._work.put(None)
+        for worker in self._workers:
+            worker.join(timeout=5)
 
     # ---- events ----------------------------------------------------------
     def created(self, path: Path) -> None:

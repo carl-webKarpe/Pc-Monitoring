@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/Database.php';
+require_once __DIR__ . '/../helpers/FileRisk.php';
 
 final class MySQLRepository
 {
@@ -21,7 +22,7 @@ final class MySQLRepository
         FROM scans s LEFT JOIN computers c ON c.id = s.computer_id LEFT JOIN users u ON u.id = s.created_by';
     private const RESOURCES = ['computers' => [self::COMPUTER_SELECT, 'c'], 'threats' => [self::THREAT_SELECT, 't'], 'scans' => [self::SCAN_SELECT, 's']];
     private const FILTERABLE = ['threats' => ['severity', 'status', 'computer_id'], 'scans' => ['status', 'scan_type', 'computer_id'], 'file_events' => ['computer_id', 'event_type', 'status']];
-    private const FILE_EVENT_SELECT = 'SELECT f.*, c.hostname AS computer_hostname, c.device_id AS computer_device_id, c.ip_address AS computer_ip_address FROM file_events f JOIN computers c ON c.id = f.computer_id';
+    private const FILE_EVENT_SELECT = 'SELECT f.*, c.hostname AS computer_hostname, c.device_id AS computer_device_id, c.ip_address AS computer_ip_address, c.status AS computer_status, s.status AS scan_status, s.completed_at AS scan_completed_at, s.scan_details AS scan_details FROM file_events f JOIN computers c ON c.id = f.computer_id LEFT JOIN scans s ON s.id = f.scan_id';
 
     private static array $permissionCache = [];
 
@@ -130,11 +131,11 @@ final class MySQLRepository
     public static function insertFileEvents(int $computerId, array $events): array
     {
         $db = self::db();
-        $statement = $db->prepare('INSERT INTO file_events (event_uid, computer_id, event_type, file_name, file_path, file_size, sha256, detected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = id');
+        $statement = $db->prepare('INSERT INTO file_events (event_uid, computer_id, event_type, file_name, file_path, file_size, sha256, detected_at, risk_level, suggested_confidential) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = id');
         $accepted = 0;
         $db->beginTransaction();
         try {
-            foreach ($events as $event) { $statement->execute([$event['uid'], $computerId, $event['type'], $event['fileName'], $event['filePath'], $event['fileSize'], $event['sha256'], $event['detectedAt']]); $accepted += $statement->rowCount() === 1 ? 1 : 0; }
+            foreach ($events as $event) { $created = $event['type'] === 'created'; $statement->execute([$event['uid'], $computerId, $event['type'], $event['fileName'], $event['filePath'], $event['fileSize'], $event['sha256'], $event['detectedAt'], $created ? FileRisk::preScanRisk($event['fileName']) : 'Unknown', $created && FileRisk::suggestConfidential($event['fileName'], $event['filePath']) ? 1 : 0]); $accepted += $statement->rowCount() === 1 ? 1 : 0; }
             $db->commit();
         } catch (Throwable $exception) { $db->rollBack(); throw $exception; }
         return [$accepted, count($events) - $accepted];
@@ -149,5 +150,79 @@ final class MySQLRepository
         return [(int)self::db()->lastInsertId(), true, false];
     }
 
-    public static function tableAccessible(string $table): bool { if (!in_array($table, ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events'], true)) return false; self::db()->query("SELECT 1 FROM `$table` LIMIT 1")->fetchAll(); return true; }
+    // ---- Detected files and on-PC scanning (Phase 11) ---------------------------------------------------
+
+    public static function findFileEvent(int $id): ?array { return self::fetchOne(self::FILE_EVENT_SELECT . ' WHERE f.id = ?', [$id]); }
+    public static function scansForFileEvent(int $id): array { return self::fetchAll(self::SCAN_SELECT . ' WHERE s.file_event_id = ? ORDER BY s.id DESC LIMIT 20', [$id]); }
+
+    public static function updateFileEvent(int $id, ?string $classification, ?string $status): array
+    {
+        self::db()->prepare('UPDATE file_events SET classification = COALESCE(?, classification), status = COALESCE(?, status) WHERE id = ?')->execute([$classification, $status, $id]);
+        return self::findFileEvent($id) ?? [];
+    }
+
+    // Creates a PENDING scan that the agent on that computer picks up (see scanJobs). Returns the scan id.
+    public static function requestScan(array $fileEvent, int $userId): int
+    {
+        $db = self::db();
+        $db->beginTransaction();
+        try {
+            $db->prepare("INSERT INTO scans (computer_id, scan_type, status, file_name, file_hash, file_path, file_event_id, threat_count, created_by) VALUES (?, 'File Scan', 'PENDING', ?, ?, ?, ?, 0, ?)")
+                ->execute([$fileEvent['computerId'], $fileEvent['fileName'], $fileEvent['sha256'], $fileEvent['filePath'], $fileEvent['id'], $userId]);
+            $scanId = (int)$db->lastInsertId();
+            $db->prepare("UPDATE file_events SET status = 'Scan Requested', scan_id = ? WHERE id = ?")->execute([$scanId, $fileEvent['id']]);
+            $db->commit();
+        } catch (Throwable $exception) { $db->rollBack(); throw $exception; }
+        return $scanId;
+    }
+
+    /** Pending scans for one computer; a job not answered within 5 minutes is handed out again. */
+    public static function scanJobs(int $computerId, int $limit = 5): array
+    {
+        $statement = self::db()->prepare("SELECT s.id, s.file_path, s.file_name, s.file_hash FROM scans s WHERE s.computer_id = ? AND s.status = 'PENDING' AND s.file_path IS NOT NULL AND (s.started_at IS NULL OR s.started_at < NOW() - INTERVAL 5 MINUTE) ORDER BY s.id LIMIT " . max(1, $limit));
+        $statement->execute([$computerId]);
+        $jobs = $statement->fetchAll();
+        if ($jobs) self::db()->prepare('UPDATE scans SET started_at = NOW() WHERE id IN (' . implode(',', array_fill(0, count($jobs), '?')) . ')')->execute(array_column($jobs, 'id'));
+        return array_map(fn($job) => ['scanId' => (int)$job['id'], 'filePath' => $job['file_path'], 'fileName' => $job['file_name'], 'expectedSha256' => $job['file_hash']], $jobs);
+    }
+
+    public static function findPendingScan(int $scanId, int $computerId): ?array { return self::fetchOne("SELECT s.*, c.hostname AS computer_hostname FROM scans s JOIN computers c ON c.id = s.computer_id WHERE s.id = ? AND s.computer_id = ? AND s.status = 'PENDING'", [$scanId, $computerId]); }
+
+    public static function blocklistMatch(?string $sha256): ?array
+    {
+        if ($sha256 === null) return null;
+        $statement = self::db()->prepare('SELECT name, severity FROM hash_blocklist WHERE sha256 = ? LIMIT 1');
+        $statement->execute([strtolower($sha256)]);
+        return $statement->fetch() ?: null;
+    }
+
+    /**
+     * Stores a finished scan: updates the scan and its file event, and records a threat for THREAT results.
+     * @param ?array $verdict FileRisk::verdict() result, or null when the scan failed
+     */
+    public static function completeScan(array $scan, ?array $verdict, ?string $sha256, int $durationMs, ?string $error): array
+    {
+        $db = self::db();
+        $status = $verdict['status'] ?? 'FAILED';
+        $risk = $verdict['risk'] ?? 'Unknown';
+        $details = json_encode($verdict ? ['findings' => $verdict['findings']] : ['error' => $error], JSON_UNESCAPED_SLASHES);
+        $duration = number_format($durationMs / 1000, 1) . ' sec';
+        $db->beginTransaction();
+        try {
+            $db->prepare('UPDATE scans SET status = ?, risk_level = ?, file_hash = COALESCE(?, file_hash), threat_count = ?, completed_at = NOW(), started_at = COALESCE(started_at, NOW()), duration = ?, scan_details = ? WHERE id = ?')
+                ->execute([$status, $risk, $sha256, $verdict['threatCount'] ?? 0, $duration, $details, $scan['id']]);
+            if ($scan['fileEventId'] !== null) $db->prepare('UPDATE file_events SET status = ?, risk_level = ? WHERE id = ? AND scan_id = ?')->execute([$verdict ? 'Scanned' : 'Scan Failed', $risk, $scan['fileEventId'], $scan['id']]);
+            if ($status === 'THREAT') {
+                $top = $verdict['top'];
+                $severity = $risk === 'Critical' ? 'CRITICAL' : 'HIGH';
+                $db->prepare("INSERT INTO threats (computer_id, threat_name, description, severity, status, source) VALUES (?, ?, ?, ?, 'Detected', 'File Scanner')")
+                    ->execute([$scan['computerId'], substr($top['title'] . ': ' . $scan['fileName'], 0, 160), $top['detail'] . ' | File: ' . $scan['filePath'] . ' | Scan #' . $scan['id'], $severity]);
+                $db->prepare("UPDATE computers SET status = 'threat', threat_level = 'high' WHERE id = ?")->execute([$scan['computerId']]);
+            }
+            $db->commit();
+        } catch (Throwable $exception) { $db->rollBack(); throw $exception; }
+        return self::find('scans', (int)$scan['id']) ?? [];
+    }
+
+    public static function tableAccessible(string $table): bool { if (!in_array($table, ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events', 'hash_blocklist'], true)) return false; self::db()->query("SELECT 1 FROM `$table` LIMIT 1")->fetchAll(); return true; }
 }
