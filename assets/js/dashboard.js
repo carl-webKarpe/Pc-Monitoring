@@ -98,7 +98,7 @@ function renderDashboardComputers(computers) {
     const [pill, label] = dashboardStatus[computer.status] || ['offline', String(computer.status).toUpperCase()];
     const threats = Number(computer.activeThreats || 0);
     const threatClass = threats ? (computer.status === 'threat' ? ' class="danger-text"' : ' class="warning-text"') : '';
-    return `<tr><td><i class="fa-solid fa-desktop table-icon"></i> ${esc(computer.hostname)}</td><td>${esc(computer.ipAddress)}</td><td><span class="status-pill ${pill}">● ${esc(label)}</span></td><td${threatClass}>${threats}</td><td>${esc(computer.lastSeen)}</td></tr>`;
+    return `<tr><td><i class="fa-solid fa-desktop table-icon"></i> ${esc(computer.hostname)}</td><td>${esc(computer.ipAddress)}</td><td><span class="status-pill ${pill}">● ${esc(label)}</span></td><td${threatClass}>${threats}</td><td>${esc(computer.lastHeartbeatAt ? mstTimeAgo(computer.lastHeartbeatAt) : computer.lastSeen)}</td></tr>`;
   }).join('') : '<tr><td colspan="5">No computers recorded yet.</td></tr>';
 }
 

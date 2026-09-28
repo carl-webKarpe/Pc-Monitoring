@@ -20,13 +20,14 @@ final class MySQLRepository
     private const SCAN_SELECT = 'SELECT s.*, c.hostname AS computer_hostname, c.device_id AS computer_device_id, u.username AS created_by_username
         FROM scans s LEFT JOIN computers c ON c.id = s.computer_id LEFT JOIN users u ON u.id = s.created_by';
     private const RESOURCES = ['computers' => [self::COMPUTER_SELECT, 'c'], 'threats' => [self::THREAT_SELECT, 't'], 'scans' => [self::SCAN_SELECT, 's']];
-    private const FILTERABLE = ['threats' => ['severity', 'status', 'computer_id'], 'scans' => ['status', 'scan_type', 'computer_id']];
+    private const FILTERABLE = ['threats' => ['severity', 'status', 'computer_id'], 'scans' => ['status', 'scan_type', 'computer_id'], 'file_events' => ['computer_id', 'event_type', 'status']];
+    private const FILE_EVENT_SELECT = 'SELECT f.*, c.hostname AS computer_hostname, c.device_id AS computer_device_id, c.ip_address AS computer_ip_address FROM file_events f JOIN computers c ON c.id = f.computer_id';
 
     private static array $permissionCache = [];
 
     private static function db(): PDO { return Database::connection(); }
     private static function map(array $row): array { foreach ($row as $key => $value) { $camel = preg_replace_callback('/_([a-z])/', fn($m) => strtoupper($m[1]), $key); if ($camel !== $key) { $row[$camel] = $value; unset($row[$key]); } } return $row; }
-    private static function public(array $row): array { unset($row['passwordHash']); return $row; }
+    private static function public(array $row): array { unset($row['passwordHash'], $row['agentTokenHash']); return $row; }
     private static function roleClause(array $roles): string { return 'role IN (' . implode(', ', array_fill(0, count($roles), '?')) . ')'; }
     private static function optionalText(array $data, string $field): ?string { return isset($data[$field]) && trim((string)$data[$field]) !== '' ? trim((string)$data[$field]) : null; }
     private static function fetchAll(string $sql, array $params = []): array { $statement = self::db()->prepare($sql); $statement->execute($params); return array_map(fn($row) => self::public(self::map($row)), $statement->fetchAll()); }
@@ -36,8 +37,10 @@ final class MySQLRepository
     {
         $page = ' LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset);
         if (isset(self::ACCOUNT_ROLES[$resource])) { $roles = self::ACCOUNT_ROLES[$resource]; return self::fetchAll('SELECT * FROM users WHERE ' . self::roleClause($roles) . ' ORDER BY id DESC' . $page, $roles); }
-        if (!isset(self::RESOURCES[$resource])) throw new InvalidArgumentException('Unsupported resource');
-        [$select, $alias] = self::RESOURCES[$resource];
+        if ($resource === 'computers') self::markStaleComputersOffline();
+        $resources = self::RESOURCES + ['file_events' => [self::FILE_EVENT_SELECT, 'f']];
+        if (!isset($resources[$resource])) throw new InvalidArgumentException('Unsupported resource');
+        [$select, $alias] = $resources[$resource];
         $conditions = []; $params = [];
         foreach ($filters as $column => $value) {
             if (!in_array($column, self::FILTERABLE[$resource] ?? [], true)) throw new InvalidArgumentException('Unsupported filter');
@@ -50,6 +53,7 @@ final class MySQLRepository
     {
         if (isset(self::ACCOUNT_ROLES[$resource])) { $roles = self::ACCOUNT_ROLES[$resource]; return self::fetchOne('SELECT * FROM users WHERE id = ? AND ' . self::roleClause($roles), [$id, ...$roles]); }
         if (!isset(self::RESOURCES[$resource])) return null;
+        if ($resource === 'computers') self::markStaleComputersOffline();
         [$select, $alias] = self::RESOURCES[$resource];
         return self::fetchOne("$select WHERE $alias.id = ?", [$id]);
     }
@@ -66,6 +70,7 @@ final class MySQLRepository
 
     public static function reports(): array
     {
+        self::markStaleComputersOffline();
         $db = self::db();
         $computers = $db->query("SELECT COUNT(*) AS total, COALESCE(SUM(status = 'online'), 0) AS online, COALESCE(SUM(status = 'offline'), 0) AS offline, COALESCE(SUM(status = 'warning'), 0) AS warning, COALESCE(SUM(status = 'threat'), 0) AS threat, COALESCE(SUM(agent_status = 'connected'), 0) AS agent_connected FROM computers")->fetch();
         $threats = $db->query("SELECT COUNT(*) AS total, COALESCE(SUM(status NOT IN ('Resolved', 'Ignored')), 0) AS open, COALESCE(SUM(severity = 'CRITICAL'), 0) AS critical, COALESCE(SUM(severity = 'HIGH'), 0) AS high, COALESCE(SUM(severity = 'MEDIUM'), 0) AS medium, COALESCE(SUM(severity = 'LOW'), 0) AS low, COALESCE(SUM(status = 'Resolved'), 0) AS resolved, COALESCE(SUM(severity = 'CRITICAL' AND status NOT IN ('Resolved', 'Ignored')), 0) AS critical_open FROM threats")->fetch();
@@ -96,5 +101,53 @@ final class MySQLRepository
     public static function settings(): array { $result = []; foreach (self::db()->query('SELECT setting_key, setting_value FROM settings')->fetchAll() as $row) $result[$row['setting_key']] = $row['setting_value']; return $result; }
     public static function saveSettings(array $settings): array { $statement = self::db()->prepare('INSERT INTO settings (category, setting_key, setting_value) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = CURRENT_TIMESTAMP'); foreach ($settings as $key => [$category, $value]) $statement->execute([$category, $key, $value]); return self::settings(); }
 
-    public static function tableAccessible(string $table): bool { if (!in_array($table, ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings'], true)) return false; self::db()->query("SELECT 1 FROM `$table` LIMIT 1")->fetchAll(); return true; }
+    // ---- Agent (Phase 9) -------------------------------------------------------------------------------
+
+    // A computer whose agent stopped sending heartbeats is shown offline after the "Offline Threshold" setting (minimum 45 s).
+    public static function markStaleComputersOffline(): void
+    {
+        $seconds = 90;
+        $setting = self::db()->query("SELECT setting_value FROM settings WHERE setting_key = 'offlineThreshold'")->fetchColumn();
+        if ($setting !== false && preg_match('/^(\d{1,4}) (second|minute|hour)s?$/i', trim((string)$setting), $match)) $seconds = (int)$match[1] * ['second' => 1, 'minute' => 60, 'hour' => 3600][strtolower($match[2])];
+        self::db()->prepare("UPDATE computers SET status = 'offline', agent_status = 'disconnected' WHERE agent_status = 'connected' AND last_heartbeat_at IS NOT NULL AND last_heartbeat_at < NOW() - INTERVAL ? SECOND")->execute([max(45, $seconds)]);
+    }
+
+    // Includes the token hash: only for AgentAuth, never returned to clients.
+    public static function findComputerForAgent(string $deviceId): ?array { $statement = self::db()->prepare('SELECT id, device_id, hostname, agent_token_hash FROM computers WHERE device_id = ? LIMIT 1'); $statement->execute([$deviceId]); $row = $statement->fetch(); return $row ? self::map($row) : null; }
+
+    public static function recordHeartbeat(int $computerId, array $data): void
+    {
+        // Online status also reflects open threats: CRITICAL/HIGH -> threat, other open threats -> warning.
+        $openThreat = "EXISTS (SELECT 1 FROM threats t WHERE t.computer_id = computers.id AND t.status NOT IN ('Resolved', 'Ignored')";
+        self::db()->prepare("UPDATE computers SET hostname = ?, ip_address = ?, mac_address = ?, operating_system = ?, agent_version = ?, cpu_usage = ?, memory_usage = ?, disk_usage = ?,
+            agent_status = 'connected', last_heartbeat_at = NOW(), last_seen = DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'),
+            status = CASE WHEN $openThreat AND t.severity IN ('CRITICAL', 'HIGH')) THEN 'threat' WHEN $openThreat) THEN 'warning' ELSE 'online' END,
+            threat_level = CASE WHEN $openThreat AND t.severity IN ('CRITICAL', 'HIGH')) THEN 'high' WHEN $openThreat) THEN 'warning' ELSE 'safe' END
+            WHERE id = ?")->execute([$data['hostname'], $data['ipAddress'], $data['macAddress'], $data['operatingSystem'], $data['agentVersion'], $data['cpuUsage'], $data['memoryUsage'], $data['diskUsage'], $computerId]);
+    }
+
+    /** @return array{0: int, 1: int} [accepted, duplicates]; events are already validated. Duplicate event UIDs (agent retries) are skipped. */
+    public static function insertFileEvents(int $computerId, array $events): array
+    {
+        $db = self::db();
+        $statement = $db->prepare('INSERT INTO file_events (event_uid, computer_id, event_type, file_name, file_path, file_size, sha256, detected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = id');
+        $accepted = 0;
+        $db->beginTransaction();
+        try {
+            foreach ($events as $event) { $statement->execute([$event['uid'], $computerId, $event['type'], $event['fileName'], $event['filePath'], $event['fileSize'], $event['sha256'], $event['detectedAt']]); $accepted += $statement->rowCount() === 1 ? 1 : 0; }
+            $db->commit();
+        } catch (Throwable $exception) { $db->rollBack(); throw $exception; }
+        return [$accepted, count($events) - $accepted];
+    }
+
+    /** Creates the computer if needed and stores a new agent token hash. @return array{0: int, 1: bool, 2: bool} [computer id, created, replaced an existing token] */
+    public static function registerAgent(string $deviceId, string $hostname, string $ipAddress, string $tokenHash): array
+    {
+        $existing = self::findComputerForAgent($deviceId);
+        if ($existing) { self::db()->prepare('UPDATE computers SET agent_token_hash = ? WHERE id = ?')->execute([$tokenHash, $existing['id']]); return [(int)$existing['id'], false, !empty($existing['agentTokenHash'])]; }
+        self::db()->prepare("INSERT INTO computers (device_id, hostname, ip_address, operating_system, status, threat_level, last_seen, agent_status, agent_token_hash) VALUES (?, ?, ?, 'Unknown', 'offline', 'unknown', 'Never', 'disconnected', ?)")->execute([$deviceId, $hostname, $ipAddress, $tokenHash]);
+        return [(int)self::db()->lastInsertId(), true, false];
+    }
+
+    public static function tableAccessible(string $table): bool { if (!in_array($table, ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events'], true)) return false; self::db()->query("SELECT 1 FROM `$table` LIMIT 1")->fetchAll(); return true; }
 }

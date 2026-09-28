@@ -16,6 +16,8 @@ require_once __DIR__ . '/../controllers/PermissionController.php';
 require_once __DIR__ . '/../controllers/SettingsController.php';
 require_once __DIR__ . '/../controllers/FileScannerController.php';
 require_once __DIR__ . '/../controllers/HealthController.php';
+require_once __DIR__ . '/../controllers/AgentController.php';
+require_once __DIR__ . '/../controllers/FileEventController.php';
 
 ini_set('display_errors', '0');
 mst_apply_cors();
@@ -44,6 +46,8 @@ if ($resource === 'auth') {
 }
 if ($resource === 'health' && $id === 'database' && $action === null) HealthController::database($method);
 if ($resource === 'dashboard' && $id === null) ReportController::index($method, 'dashboard');
+if ($resource === 'agent' && $action === null) AgentController::index($method, $id);
+if ($resource === 'file-events') FileEventController::index($method, $id);
 if ($resource === 'users') UserController::index($method, $id);
 if ($resource === 'admins') AdminController::index($method, $id);
 if ($resource === 'computers') ComputerController::index($method, $id);

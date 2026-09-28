@@ -55,6 +55,28 @@ function mstApiErrorMessage(error, fallback = 'Unable to load data from the serv
   return error.message || fallback;
 }
 
+// Notifications bell: newest files reported by the lab-PC agents. Keeps the page's demo items if the API is unreachable.
+async function mstLoadNotifications() {
+  const panel = document.getElementById('notificationsPanel');
+  if (!panel || !window.MSTApi) return;
+  let events;
+  try {
+    events = (await window.MSTApi.apiGet('/file-events?type=created&limit=5')).data;
+  } catch (error) {
+    return;
+  }
+  const container = panel.querySelector('.notification-list') || panel;
+  panel.querySelectorAll('.notification-item').forEach((item) => item.remove());
+  const items = events.length ? events.map((event) => `<div class="notification-item warning"><i class="fa-solid fa-file-circle-exclamation"></i><div><strong>New file detected: ${mstEscape(event.fileName)}</strong><small>${mstEscape(event.computerHostname)} · ${mstEscape(mstTimeAgo(event.detectedAt))}</small></div></div>`).join('') : '<div class="notification-item success"><i class="fa-solid fa-circle-check"></i><div><strong>No new file activity</strong><small>Files reported by the monitoring agents appear here.</small></div></div>';
+  container.insertAdjacentHTML('beforeend', items);
+  const badge = document.querySelector('#notificationsToggle .badge-dot');
+  if (badge) {
+    const recent = events.filter((event) => { const date = mstParseDate(event.detectedAt); return date && Date.now() - date.getTime() < 86400000; }).length;
+    badge.textContent = recent;
+    badge.style.display = recent ? '' : 'none';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
   const pathPrefix = window.location.pathname.includes('/management/') ? '../' : '';
@@ -72,7 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.MSTApi.authMe().then(({ data }) => {
       const serverRole = toFrontendRole(data.user.role);
       if (!serverRole) { redirectToLogin(); return; }
-      if (serverRole !== role) { sessionStorage.setItem('mstRole', serverRole); window.location.reload(); }
+      if (serverRole !== role) { sessionStorage.setItem('mstRole', serverRole); window.location.reload(); return; }
+      mstLoadNotifications();
     }).catch((error) => {
       if (error.status === 401) redirectToLogin();
       // Other failures (API offline) keep the current view; every API request is still authorized server-side.

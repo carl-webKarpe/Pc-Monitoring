@@ -212,3 +212,10 @@ Future implementation:
 - Persistent system settings
 
 The credentials documented above are **DEMO ONLY - NOT FOR PRODUCTION**.
+
+## Phases 8–9 - Monitoring Agent and Agent API
+
+Each authorized lab PC runs the Python agent in [`agent/`](agent/README.md). It sends a heartbeat (online status, IP, CPU, memory, disk) and reports new and deleted files in the folders you configure (name, location, size, time, SHA-256) to the PHP API, which stores them in MySQL (`computers`, `file_events`). The dashboard shows real online/offline status, recent file activity per computer, and new-file notifications on the bell icon. The agent only collects file metadata and hashes; it does not upload files, log keystrokes, capture the screen or run hidden.
+
+Existing databases: run `database/migrations/phase9_agent.sql` once. Register each PC with `php backend/tools/register-agent.php <DEVICE-ID> <HOSTNAME> [IP]`. Scanning detected files is Phase 11.
+

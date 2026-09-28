@@ -11,9 +11,9 @@ let computerRows = [];
 let computerDataIsDemo = false;
 
 // Maps a MySQL-backed /api/computers record onto the structure the existing UI already renders.
-// Values the database does not store yet (MAC, disk, network, agent version) are filled by the future Python Agent phase.
+// MAC, disk, agent version and last heartbeat come from the lab-PC agent once it is registered and running.
 function fromApiComputer(computer) {
-  return { dbId: computer.id, id: computer.deviceId, name: computer.hostname, ip: computer.ipAddress, mac: null, os: computer.operatingSystem, status: computer.status, threatLevel: computer.threatLevel, cpu: computer.cpuUsage ?? null, memory: computer.memoryUsage ?? null, disk: null, network: null, agentVersion: null, agentStatus: computer.agentStatus, lastSeen: computer.lastSeen, threats: Number(computer.activeThreats || 0), files: Number(computer.scanCount || 0), events: null, scan: computer.lastScanAt ? mstTimeAgo(computer.lastScanAt) : 'No scans recorded' };
+  return { dbId: computer.id, id: computer.deviceId, name: computer.hostname, ip: computer.ipAddress, mac: computer.macAddress ?? null, os: computer.operatingSystem, status: computer.status, threatLevel: computer.threatLevel, cpu: computer.cpuUsage ?? null, memory: computer.memoryUsage ?? null, disk: computer.diskUsage ?? null, network: null, agentVersion: computer.agentVersion ?? null, agentStatus: computer.agentStatus, lastSeen: computer.lastHeartbeatAt ? mstTimeAgo(computer.lastHeartbeatAt) : computer.lastSeen, lastHeartbeatAt: computer.lastHeartbeatAt ?? null, threats: Number(computer.activeThreats || 0), files: Number(computer.scanCount || 0), events: null, scan: computer.lastScanAt ? mstTimeAgo(computer.lastScanAt) : 'No scans recorded' };
 }
 
 async function fetchComputers() {
@@ -76,9 +76,24 @@ function showComputerDetails(id) {
   const unavailable = (value) => (value === null || value === undefined || value === '' ? 'Unavailable' : value);
   const agentConnected = (computer.agentStatus || (offline ? 'disconnected' : 'connected')) === 'connected';
   // Recent activity, gateway and throughput are demo-only until the Python Agent phase reports them.
-  const activity = computerDataIsDemo ? '<p><time>10:42 PM</time> Agent heartbeat received</p><p><time>10:41 PM</time> File scan completed</p><p><time>10:39 PM</time> Network activity recorded</p><p><time>10:35 PM</time> System information updated</p>' : '<p><time>—</time> Agent activity will be recorded once the monitoring agent is connected (future phase).</p>';
+  const activity = computerDataIsDemo ? '<p><time>10:42 PM</time> Agent heartbeat received</p><p><time>10:41 PM</time> File scan completed</p><p><time>10:39 PM</time> Network activity recorded</p><p><time>10:35 PM</time> System information updated</p>' : '<p><time>…</time> Loading recent file activity…</p>';
   content.innerHTML = `<div class="detail-grid"><div class="detail-section"><h4>DEVICE INFORMATION</h4><p><span>Computer Name</span><strong>${esc(computer.name)}</strong></p><p><span>Device ID</span><strong>${esc(computer.id)}</strong></p><p><span>IP Address</span><strong>${esc(computer.ip)}</strong></p><p><span>MAC Address</span><strong>${esc(unavailable(computer.mac))}</strong></p><p><span>Operating System</span><strong>${esc(computer.os || 'Windows')}</strong></p><p><span>Agent Version</span><strong>${esc(unavailable(computer.agentVersion))}</strong></p><p><span>Status</span><strong class="status-pill ${esc(computer.status)}">● ${esc(statusText[computer.status] || computer.status)}</strong></p><p><span>Last Seen</span><strong>${esc(computer.lastSeen)}</strong></p></div><div class="detail-section"><h4>SYSTEM RESOURCES</h4>${resourceBar('CPU Usage', computer.cpu)}${resourceBar('Memory Usage', computer.memory)}${resourceBar('Disk Usage', computer.disk)}<p><span>Network</span><strong>${esc(unavailable(computer.network))}</strong></p><h4>SECURITY STATUS</h4><p><span>Threat Level</span><strong class="computer-threat ${esc(computer.threatLevel)}">${esc(threatText[computer.threatLevel] || computer.threatLevel)}</strong></p><p><span>Active Threats</span><strong>${esc(computer.threats)}</strong></p><p><span>Files Scanned</span><strong>${esc(computer.files)}</strong></p><p><span>Suspicious Events</span><strong>${esc(unavailable(computer.events))}</strong></p><p><span>Last Security Scan</span><strong>${esc(computer.scan)}</strong></p></div></div><div class="detail-bottom"><div><h4>NETWORK INFORMATION</h4><p>Gateway <strong>${computerDataIsDemo ? '192.168.1.1' : 'Unavailable'}</strong></p><p>Connection <strong>${computerDataIsDemo ? 'Ethernet' : 'Unavailable'}</strong></p><p>Network status <strong class="${offline ? 'danger-text' : 'success-text'}">● ${offline ? 'Disconnected' : 'Connected'}</strong></p></div><div><h4>AGENT STATUS</h4><p>Agent status <strong class="${agentConnected ? 'success-text' : 'danger-text'}">● ${esc((computer.agentStatus || (agentConnected ? 'connected' : 'disconnected')).toUpperCase())}</strong></p><p>Last heartbeat <strong>${offline ? 'Unavailable' : esc(computer.lastSeen)}</strong></p><p>Upload / Download <strong>${computerDataIsDemo ? `2.4 / ${esc(computer.network)}` : 'Unavailable'}</strong></p></div></div><div class="detail-activity"><h4>RECENT ACTIVITY</h4>${activity}</div>${computer.status === 'threat' ? '<a class="btn-primary detail-threat-link" href="threats.html">View Threats</a>' : ''}`;
   modal.classList.remove('hidden');
+  if (!computerDataIsDemo && computer.dbId) loadComputerFileActivity(computer);
+}
+
+// Recent file activity reported by this computer's agent (/api/file-events).
+async function loadComputerFileActivity(computer) {
+  const target = document.querySelector('#computerDetailContent .detail-activity');
+  if (!target) return;
+  const heading = '<h4>RECENT FILE ACTIVITY</h4>';
+  try {
+    const { data } = await window.MSTApi.apiGet(`/file-events?computerId=${encodeURIComponent(computer.dbId)}&limit=8`);
+    const size = (bytes) => (bytes === null || bytes === undefined ? '' : bytes >= 1048576 ? ` (${(bytes / 1048576).toFixed(1)} MB)` : ` (${Math.max(1, Math.round(bytes / 1024))} KB)`);
+    target.innerHTML = heading + (data.length ? data.map((event) => `<p><time>${mstEscape(mstTimeAgo(event.detectedAt))}</time> ${event.eventType === 'created' ? 'New file' : 'Deleted'}: <strong>${mstEscape(event.fileName)}</strong>${mstEscape(size(event.fileSize))}<br><small class="table-subtext">${mstEscape(event.filePath)}</small></p>`).join('') : `<p><time>—</time> ${computer.lastHeartbeatAt ? 'No file activity reported yet.' : 'The monitoring agent has not connected from this computer yet.'}</p>`);
+  } catch (error) {
+    target.innerHTML = `${heading}<p><time>—</time> ${mstEscape(mstApiErrorMessage(error, 'Unable to load file activity.'))}</p>`;
+  }
 }
 
 function resourceBar(label, value) { const percent = value === null || value === undefined ? null : Math.max(0, Math.min(100, Number(value) || 0)); return `<div class="resource-bar"><div><span>${label}</span><strong>${percent === null ? 'Unavailable' : `${percent}%`}</strong></div><div class="resource-track"><span style="width:${percent || 0}%"></span></div></div>`; }
