@@ -1,0 +1,19 @@
+{
+  "server_url": "http://192.168.1.10:8081/api",
+  "device_id": "MST-PC-002",
+  "device_token": "PASTE-THE-TOKEN-FROM-register-agent.php",
+  "heartbeat_interval_seconds": 30,
+  "send_interval_seconds": 5,
+  "watch_folders": [
+    "%USERPROFILE%\\Downloads",
+    "%USERPROFILE%\\Desktop",
+    "%USERPROFILE%\\Documents"
+  ],
+  "recursive": true,
+  "ignore_extensions": [".tmp", ".crdownload", ".part", ".partial", ".download", ".opdownload", ".swp", ".lnk", ".ini"],
+  "ignore_name_prefixes": ["~$", ".~", "~WRL"],
+  "max_hash_size_mb": 200,
+  "queue_file": "mst_agent_queue.db",
+  "log_file": "mst_agent.log",
+  "request_timeout_seconds": 10
+}

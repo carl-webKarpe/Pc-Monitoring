@@ -1,0 +1,6 @@
+# Per-PC files: the real config holds this PC's device token.
+config.json
+*.db
+*.log
+__pycache__/
+.venv/
