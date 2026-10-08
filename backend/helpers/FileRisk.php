@@ -24,6 +24,9 @@ final class FileRisk
     private const SEVERITY_RANK = ['INFO' => 0, 'LOW' => 1, 'MEDIUM' => 2, 'HIGH' => 3, 'CRITICAL' => 4];
     private const RISK_BY_RANK = ['Safe', 'Low', 'Medium', 'High', 'Critical'];
 
+    /** Cuts text to at most $maxChars characters without breaking a multi-byte (UTF-8) character. */
+    public static function cut(string $text, int $maxChars): string { return preg_match('/^.{0,' . $maxChars . '}/us', $text, $match) ? $match[0] : ''; }
+
     private static function extensions(string $fileName): array { $parts = explode('.', strtolower($fileName)); array_shift($parts); return $parts; }
 
     public static function hasDoubleExtension(string $fileName): bool

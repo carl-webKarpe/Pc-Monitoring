@@ -4,11 +4,7 @@
   "device_token": "PASTE-THE-TOKEN-FROM-register-agent.php",
   "heartbeat_interval_seconds": 30,
   "send_interval_seconds": 5,
-  "watch_folders": [
-    "%USERPROFILE%\\Downloads",
-    "%USERPROFILE%\\Desktop",
-    "%USERPROFILE%\\Documents"
-  ],
+  "watch_folders": ["{Downloads}", "{Desktop}", "{Documents}"],
   "recursive": true,
   "ignore_extensions": [".tmp", ".crdownload", ".part", ".partial", ".download", ".opdownload", ".swp", ".lnk", ".ini"],
   "ignore_name_prefixes": ["~$", ".~", "~WRL"],

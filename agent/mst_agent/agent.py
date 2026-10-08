@@ -48,6 +48,11 @@ class Agent:
             try:
                 self.client.send_events([event for _, event in batch])
             except ApiError as error:
+                if error.permanent:
+                    # Keeping a batch the server rejects would block every newer event behind it.
+                    log.error("MST server rejected %d event(s) (%s); they are skipped", len(batch), error)
+                    self.outbox.remove([row_id for row_id, _ in batch])
+                    continue
                 self._report_connection(False, error)
                 break
             self.outbox.remove([row_id for row_id, _ in batch])
@@ -82,6 +87,10 @@ class Agent:
             try:
                 self.client.send_scan_result(self._unsent_results[0])
             except ApiError as error:
+                if error.permanent:
+                    log.error("MST server rejected the result of scan #%s (%s); it is skipped", self._unsent_results[0].get("scanId"), error)
+                    self._unsent_results.pop(0)
+                    continue
                 self._report_connection(False, error)
                 break
             self._unsent_results.pop(0)

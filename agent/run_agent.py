@@ -20,6 +20,10 @@ from mst_agent.system_info import heartbeat_payload
 
 
 def setup_logging(log_file: Path) -> None:
+    # The Windows console may not support every character in a file name; never fail on it.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     log_file.parent.mkdir(parents=True, exist_ok=True)
     formatter = logging.Formatter("%(asctime)s %(levelname)-7s %(message)s", "%Y-%m-%d %H:%M:%S")
     console = logging.StreamHandler(sys.stdout)

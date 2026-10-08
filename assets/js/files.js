@@ -1,5 +1,6 @@
 // Detected Files: files reported by the lab-PC agents (/api/file-events), classification and on-PC scans.
-const fileState = { rows: [], openId: null, timer: null };
+// ?computer=<id> (from a computer's details window) preselects that computer once.
+const fileState = { rows: [], openId: null, timer: null, linkedComputer: new URLSearchParams(window.location.search).get('computer') };
 const FILE_REFRESH_MS = 10000;
 const fileEsc = (value) => mstEscape(value);
 const fileRiskClass = { Critical: 'critical', High: 'high', Medium: 'medium', Low: 'low', Safe: 'safe', Unknown: 'unknown' };
@@ -60,7 +61,8 @@ function renderFileStats() {
 function populateFileComputerFilter() {
   const select = document.getElementById('fileComputerFilter');
   if (!select) return;
-  const current = select.value || new URLSearchParams(window.location.search).get('computer') || 'all';
+  const current = fileState.linkedComputer || select.value || 'all';
+  fileState.linkedComputer = null;
   const computers = [...new Map(fileState.rows.map((file) => [String(file.computerId), file.computerHostname])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   select.innerHTML = `<option value="all">All computers</option>${computers.map(([id, name]) => `<option value="${fileEsc(id)}">${fileEsc(name)}</option>`).join('')}`;
   select.value = computers.some(([id]) => id === current) ? current : 'all';
@@ -127,6 +129,7 @@ async function showFileDetails(id, { refresh = false } = {}) {
   document.getElementById('fileDetailsTitle').textContent = file.fileName;
   const latest = file.scans?.[0];
   const pending = file.status === 'Scan Requested' && file.scanStatus === 'PENDING';
+  const offlineNote = pending && file.computerStatus === 'offline' ? `<p class="file-note">${fileEsc(file.computerHostname)} is offline. The scan will run when its agent reconnects.</p>` : '';
   const scanAction = file.eventType !== 'created' ? '<p class="file-note">This file was deleted, so it can no longer be scanned.</p>'
     : fileCanScan() ? `<button class="btn-primary file-action" data-action="scan" ${pending ? 'disabled' : ''}><i class="fa-solid fa-magnifying-glass"></i> ${pending ? 'Waiting for the agent…' : `Scan on ${fileEsc(file.computerHostname)}`}</button>`
     : '<p class="file-note">Scanning is done by Admin accounts (File Scanner). Super Admin can review and classify files.</p>';
@@ -147,7 +150,7 @@ async function showFileDetails(id, { refresh = false } = {}) {
     <div class="relationship-panel"><h4>DETECTED ON</h4><strong>${fileEsc(file.computerHostname)}</strong><p>Device ID: ${fileEsc(file.computerDeviceId)} · IP: ${fileEsc(file.computerIpAddress)}</p><a class="text-link" href="computers.html">View Computer <i class="fa-solid fa-arrow-right"></i></a></div>
     <h4 class="phase5-subheading">SCAN RESULT</h4><div class="phase5-timeline">${latest ? scanFindings(latest) || (pending ? '<p><time>…</time> Waiting for the agent to scan the file.</p>' : '') : '<p><time>—</time> Not scanned yet.</p>'}</div>
     <h4 class="phase5-subheading">SCAN HISTORY</h4><div class="phase5-timeline">${history}</div>
-    <div class="threat-actions">${scanAction}
+    <div class="threat-actions">${scanAction}${offlineNote}
       <button class="btn-secondary file-action" data-action="Confidential"><i class="fa-solid fa-user-lock"></i> Mark Confidential</button>
       <button class="btn-secondary file-action" data-action="Normal"><i class="fa-solid fa-file"></i> Mark Normal</button>
       ${file.status === 'New' ? '<button class="btn-secondary file-action" data-action="Reviewed"><i class="fa-solid fa-eye"></i> Mark Reviewed</button>' : ''}

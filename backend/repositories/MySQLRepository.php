@@ -216,7 +216,7 @@ final class MySQLRepository
                 $top = $verdict['top'];
                 $severity = $risk === 'Critical' ? 'CRITICAL' : 'HIGH';
                 $db->prepare("INSERT INTO threats (computer_id, threat_name, description, severity, status, source) VALUES (?, ?, ?, ?, 'Detected', 'File Scanner')")
-                    ->execute([$scan['computerId'], substr($top['title'] . ': ' . $scan['fileName'], 0, 160), $top['detail'] . ' | File: ' . $scan['filePath'] . ' | Scan #' . $scan['id'], $severity]);
+                    ->execute([$scan['computerId'], FileRisk::cut($top['title'] . ': ' . $scan['fileName'], 160), FileRisk::cut($top['detail'] . ' | File: ' . $scan['filePath'] . ' | Scan #' . $scan['id'], 2000), $severity]);
                 $db->prepare("UPDATE computers SET status = 'threat', threat_level = 'high' WHERE id = ?")->execute([$scan['computerId']]);
             }
             $db->commit();

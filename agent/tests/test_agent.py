@@ -175,3 +175,117 @@ def test_scan_refuses_missing_files_and_paths_outside_watch_folders(tmp_path):
         scan_file(watched / "gone.exe", [watched], None, 10_000)
     with pytest.raises(ScanError):
         scan_file(watched / ".." / "outside" / "secret.txt", [watched], None, 10_000)
+
+
+# ---- fixes from the code check -----------------------------------------------------------------------
+from mst_agent.agent import Agent  # noqa: E402
+from mst_agent.api_client import ApiError  # noqa: E402
+from mst_agent.folders import onedrive_fallback, resolve_known_folder  # noqa: E402
+
+
+def test_firefox_download_reports_one_new_file_and_no_false_delete(tmp_path, monkeypatch):
+    monkeypatch.setattr(file_monitor, "CHECK_INTERVAL", 0.2)
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    events = []
+    monitor = FileMonitor(load_config(write_config(tmp_path, ignore_extensions=[".part"])), events.append)
+    monitor.start()
+    try:
+        (watched / "report.pdf").write_bytes(b"")              # Firefox placeholder
+        (watched / "report.pdf.part").write_bytes(b"x" * 5000)  # the download in progress
+        time.sleep(0.2)
+        (watched / "report.pdf").unlink()
+        (watched / "report.pdf.part").rename(watched / "report.pdf")
+        assert wait_for(events, lambda e: e["type"] == "created" and e["fileSize"] == 5000)
+        time.sleep(1.5)
+    finally:
+        monitor.stop()
+    assert [(e["type"], e["fileName"], e["fileSize"]) for e in events] == [("created", "report.pdf", 5000)]
+
+
+def test_short_lived_temp_file_is_not_reported(tmp_path, monkeypatch):
+    monkeypatch.setattr(file_monitor, "CHECK_INTERVAL", 0.2)
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    events = []
+    monitor = FileMonitor(load_config(write_config(tmp_path)), events.append)
+    monitor.start()
+    try:
+        (watched / "blip.txt").write_text("x", encoding="utf-8")
+        time.sleep(0.1)
+        (watched / "blip.txt").unlink()
+        time.sleep(1.5)
+    finally:
+        monitor.stop()
+    assert events == []
+
+
+def test_long_non_english_file_names_are_reported(tmp_path, monkeypatch):
+    monkeypatch.setattr(file_monitor, "CHECK_INTERVAL", 0.2)
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    events = []
+    monitor = FileMonitor(load_config(write_config(tmp_path)), events.append)
+    monitor.start()
+    name = "Talaan ng mga Marka ñ " + "ñ" * 60 + ".xlsx"
+    try:
+        (watched / name).write_text("data", encoding="utf-8")
+        assert wait_for(events, lambda e: e["fileName"] == name)
+    finally:
+        monitor.stop()
+
+
+def test_onedrive_moved_documents_are_still_watched(tmp_path, monkeypatch):
+    profile, onedrive = tmp_path / "profile", tmp_path / "profile" / "OneDrive"
+    (onedrive / "Documents").mkdir(parents=True)
+    monkeypatch.setenv("USERPROFILE", str(profile))
+    monkeypatch.setenv("OneDrive", str(onedrive))
+    # Old-style config entry pointing at the profile folder that OneDrive moved away.
+    config = load_config(write_config(tmp_path, watch_folders=[str(profile / "Documents")]))
+    assert config.watch_folders == [onedrive / "Documents"]
+    assert onedrive_fallback(tmp_path / "elsewhere" / "Documents") is None
+
+
+def test_known_folder_tokens(tmp_path):
+    assert resolve_known_folder("{Downloads}") is not None
+    assert resolve_known_folder("{Pictures}") is None
+    config = load_config(write_config(tmp_path, watch_folders=["{Downloads}", "{Desktop}", "{Documents}"]))
+    assert [folder.name for folder in config.watch_folders] == ["Downloads", "Desktop", "Documents"]
+
+
+class FakeClient:
+    def __init__(self, error):
+        self.error, self.calls = error, 0
+
+    def send_events(self, events):
+        self.calls += 1
+        raise self.error
+
+    def scan_jobs(self):
+        return []
+
+    def send_scan_result(self, result):
+        self.calls += 1
+        raise self.error
+
+
+def test_permanently_rejected_events_and_results_do_not_block_the_queue(tmp_path):
+    agent = Agent(load_config(write_config(tmp_path)))
+    agent.outbox.put({"uid": "x"})
+    agent.client = FakeClient(ApiError("Validation failed", 422))
+    agent._unsent_results.append({"scanId": 1})
+    agent.flush()
+    agent.process_scan_jobs()
+    assert len(agent.outbox) == 0 and agent._unsent_results == []
+
+    # Temporary problems (server down, 500, wrong token) keep everything for a retry.
+    for error in (ApiError("down"), ApiError("server error", 500), ApiError("token", 401)):
+        agent.outbox.put({"uid": "y"})
+        agent._unsent_results.append({"scanId": 2})
+        agent.client = FakeClient(error)
+        agent.flush()
+        agent.process_scan_jobs()
+        assert len(agent.outbox) == 1 and len(agent._unsent_results) == 1
+        agent.outbox.remove([row_id for row_id, _ in agent.outbox.peek()])
+        agent._unsent_results.clear()
+    agent.outbox.close()

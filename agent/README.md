@@ -37,7 +37,7 @@ It does **not** upload file contents, record keystrokes, capture the screen, con
 4. Copy `config.example.json` to `config.json` and edit it:
    - `server_url`: `http://<admin-laptop-IP>:8081/api` (e.g. `http://192.168.1.10:8081/api`)
    - `device_id` and `device_token`: from step 1.3
-   - `watch_folders`: the folders to monitor (`%USERPROFILE%` means the logged-in user's folder)
+   - `watch_folders`: the folders to monitor. `{Downloads}`, `{Desktop}` and `{Documents}` use the folders' real locations from Windows, so they also work when OneDrive has moved Desktop/Documents. You can also list full paths (`%USERPROFILE%` means the logged-in user's folder); a missing folder under the user profile is looked up in OneDrive automatically.
 5. Test the connection (sends one heartbeat and exits):
    ```powershell
    python run_agent.py --check

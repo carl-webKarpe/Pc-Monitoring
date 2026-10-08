@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .folders import onedrive_fallback, resolve_known_folder
+
 DEVICE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{3,40}$")
 
 
@@ -42,6 +44,19 @@ def _expand(path: str, base: Path) -> Path:
     return expanded if expanded.is_absolute() else (base / expanded)
 
 
+def _watch_folder(value: str, base: Path) -> Path:
+    """{Downloads}/{Desktop}/{Documents} use Windows' real folder locations; a missing folder under the
+    user profile is looked up in OneDrive too (OneDrive folder backup moves Desktop and Documents)."""
+    if value.startswith("{") and value.endswith("}"):
+        known = resolve_known_folder(value)
+        if known is not None:
+            return known
+    folder = _expand(value, base)
+    if not folder.is_dir():
+        return onedrive_fallback(folder) or folder
+    return folder
+
+
 def load_config(path: str | Path, require_token: bool = True) -> AgentConfig:
     config_path = Path(path).resolve()
     if not config_path.is_file():
@@ -66,7 +81,7 @@ def load_config(path: str | Path, require_token: bool = True) -> AgentConfig:
     if require_token and (len(device_token) < 32 or "PASTE" in device_token):
         errors.append("device_token is missing: run backend/tools/register-agent.php on the MST server and paste the token")
 
-    folders = [_expand(str(folder), base) for folder in raw.get("watch_folders", [])]
+    folders = [_watch_folder(str(folder), base) for folder in raw.get("watch_folders", [])]
     if not folders:
         errors.append("watch_folders must list at least one folder")
 

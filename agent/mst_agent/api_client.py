@@ -13,6 +13,12 @@ class ApiError(Exception):
         super().__init__(message)
         self.status = status
 
+    @property
+    def permanent(self) -> bool:
+        """The server will never accept this exact request (e.g. 422), so retrying cannot help.
+        Not permanent: no connection, 5xx server errors, 401 (fix the token), 408/429 (try later)."""
+        return self.status is not None and 400 <= self.status < 500 and self.status not in (401, 408, 429)
+
 
 class ApiClient:
     def __init__(self, config: AgentConfig):

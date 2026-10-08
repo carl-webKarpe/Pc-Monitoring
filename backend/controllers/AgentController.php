@@ -32,7 +32,7 @@ final class AgentController
         $text = static function (string $field, int $max, bool $required = true) use ($data, &$errors): ?string {
             $value = $data[$field] ?? null;
             if ($value === null || $value === '') { if ($required) $errors[$field] = "$field is required"; return null; }
-            if (!is_string($value) || !preg_match('//u', $value) || strlen($value) > $max || preg_match('/[\x00-\x1F\x7F<>]/', $value)) { $errors[$field] = "$field is invalid"; return null; }
+            if (!is_string($value) || !preg_match('/^.{1,' . $max . '}$/us', $value) || preg_match('/[\x00-\x1F\x7F<>]/', $value)) { $errors[$field] = "$field is invalid"; return null; }
             return trim($value);
         };
         $percent = static function (string $field) use ($data, &$errors): ?int {
@@ -112,7 +112,7 @@ final class AgentController
         $size = $event['fileSize'] ?? null; $sha256 = $event['sha256'] ?? null; $detected = $event['detectedAt'] ?? null;
         if (!is_string($uid) || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $uid)) return null;
         if (!in_array($type, ['created', 'deleted'], true)) return null;
-        foreach ([[$name, 255], [$path, 1024]] as [$value, $max]) if (!is_string($value) || $value === '' || strlen($value) > $max || !preg_match('//u', $value) || preg_match('/[\x00-\x1F\x7F]/', $value)) return null;
+        foreach ([[$name, 255], [$path, 1024]] as [$value, $max]) if (!is_string($value) || $value === '' || !preg_match('/^.{1,' . $max . '}$/us', $value) || preg_match('/[\x00-\x1F\x7F]/', $value)) return null;
         if ($size !== null && (!is_int($size) || $size < 0)) return null;
         if ($sha256 !== null && (!is_string($sha256) || !preg_match('/^[0-9a-f]{64}$/i', $sha256))) return null;
         if (!is_string($detected)) return null;

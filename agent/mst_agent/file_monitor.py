@@ -111,7 +111,10 @@ class FileMonitor:
         if self.is_ignored(path):
             return
         with self._pending_lock:
-            self._pending.discard(str(path))
+            if str(path) in self._pending:
+                # Still being checked as a new file (e.g. Firefox's placeholder replaced by the finished
+                # download, or a short-lived temp file): the worker reports it only if it still exists.
+                return
         self._emit("deleted", path, detected_at=utc_now())
 
     def _process_created(self) -> None:
