@@ -5,11 +5,23 @@ declare(strict_types=1);
 // Run on the MST server from the project root:
 //   php backend/tools/register-agent.php MST-PC-002 LAB-PC-02 [192.168.1.21]
 // Running it again for the same device ID issues a NEW token; the old token stops working.
+// Revoke a PC (lost, replaced or no longer authorized):
+//   php backend/tools/register-agent.php --revoke MST-PC-002
 
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../repositories/MySQLRepository.php';
+
+if (($argv[1] ?? '') === '--revoke') {
+    $deviceId = (string)($argv[2] ?? '');
+    $computer = preg_match('/^[A-Za-z0-9._-]{3,40}$/', $deviceId) ? MySQLRepository::findComputerForAgent($deviceId) : null;
+    if (!$computer) { fwrite(STDERR, "Unknown device ID.\n"); exit(2); }
+    MySQLRepository::revokeAgent((int)$computer['id']);
+    MySQLRepository::log(null, 'AGENT_REVOKED', "Revoked the agent token of $deviceId", 'computer', (string)$computer['id']);
+    echo "Agent token for $deviceId revoked. That PC can no longer send data until it is registered again.\n";
+    exit(0);
+}
 
 [$script, $deviceId, $hostname, $ipAddress] = array_pad($argv, 4, null);
 if ($deviceId === null || $hostname === null) {

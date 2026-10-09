@@ -289,3 +289,14 @@ def test_permanently_rejected_events_and_results_do_not_block_the_queue(tmp_path
         agent.outbox.remove([row_id for row_id, _ in agent.outbox.peek()])
         agent._unsent_results.clear()
     agent.outbox.close()
+
+
+def test_tls_ca_bundle_must_exist_and_is_used(tmp_path):
+    with pytest.raises(ConfigError) as error:
+        load_config(write_config(tmp_path, tls_ca_bundle="missing-ca.pem"))
+    assert "tls_ca_bundle" in str(error.value)
+    (tmp_path / "lab-ca.pem").write_text("-----BEGIN CERTIFICATE-----\n", encoding="utf-8")
+    config = load_config(write_config(tmp_path, tls_ca_bundle="lab-ca.pem"))
+    from mst_agent.api_client import ApiClient
+    assert ApiClient(config).session.verify == str(tmp_path / "lab-ca.pem")
+    assert ApiClient(load_config(write_config(tmp_path))).session.verify is True

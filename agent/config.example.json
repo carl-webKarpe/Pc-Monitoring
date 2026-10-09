@@ -11,5 +11,6 @@
   "max_hash_size_mb": 200,
   "queue_file": "mst_agent_queue.db",
   "log_file": "mst_agent.log",
-  "request_timeout_seconds": 10
+  "request_timeout_seconds": 10,
+  "tls_ca_bundle": ""
 }

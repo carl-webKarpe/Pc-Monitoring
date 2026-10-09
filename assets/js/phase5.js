@@ -35,8 +35,15 @@ const phase5Title = (value) => String(value || '').charAt(0).toUpperCase() + Str
 function fromApiThreat(threat) {
   return { dbId: threat.id, id: phase5Code('THR', threat.id), name: threat.threatName, computer: threat.computerHostname || 'Unassigned', device: threat.computerDeviceId || '—', ip: threat.computerIpAddress || '—', computerStatus: threat.computerStatus || null, severity: String(threat.severity).toLowerCase(), status: String(threat.status).toLowerCase(), source: threat.source, detected: mstFormatDate(threat.detectedAt), detectedAt: threat.detectedAt, resolvedAt: threat.resolvedAt, type: threat.threatName, result: threat.description || '—', file: '—', size: '—', hash: 'Not recorded', detection: 'Not recorded' };
 }
+function phase5Detection(scan) {
+  let vt = null;
+  try { vt = scan.scanDetails ? JSON.parse(scan.scanDetails).virusTotal : null; } catch { vt = null; }
+  if (vt?.status === 'found') return `${vt.malicious} / ${vt.total} (VirusTotal)`;
+  if (vt?.status === 'not_found') return 'Unknown to VirusTotal';
+  return 'Not recorded';
+}
 function fromApiScan(scan) {
-  return { dbId: scan.id, id: phase5Code('SCN', scan.id), file: scan.fileName || '—', computer: scan.computerHostname || '—', device: scan.computerDeviceId || '—', type: scan.scanType, result: String(scan.status).toLowerCase(), threats: Number(scan.threatCount || 0), date: mstFormatDate(scan.completedAt || scan.startedAt || scan.createdAt), started: mstFormatDate(scan.startedAt), completed: mstFormatDate(scan.completedAt), duration: scan.duration || '—', size: '—', hash: scan.fileHash || 'Unavailable', detection: 'Not recorded', createdBy: scan.createdByUsername || '—' };
+  return { dbId: scan.id, id: phase5Code('SCN', scan.id), file: scan.fileName || '—', computer: scan.computerHostname || '—', device: scan.computerDeviceId || '—', type: scan.scanType, result: String(scan.status).toLowerCase(), threats: Number(scan.threatCount || 0), date: mstFormatDate(scan.completedAt || scan.startedAt || scan.createdAt), started: mstFormatDate(scan.startedAt), completed: mstFormatDate(scan.completedAt), duration: scan.duration || '—', size: '—', hash: scan.fileHash || 'Unavailable', detection: phase5Detection(scan), createdBy: scan.createdByUsername || '—' };
 }
 
 async function fetchThreats() { const { data, demo } = await window.MSTApi.apiGetOrDemo('/threats', phase5Threats); phase5Demo.threats = demo; return demo ? data : data.map(fromApiThreat); }

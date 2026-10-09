@@ -61,6 +61,7 @@ To try the file watcher without a server: `python run_agent.py --offline` prints
 | `watch_folders`, `recursive` | Folders to monitor and whether to include sub-folders |
 | `ignore_extensions`, `ignore_name_prefixes` | Temporary files to skip (browser partial downloads, Office lock files) |
 | `max_hash_size_mb` | Files larger than this are reported without a SHA-256 (default 200 MB) |
+| `tls_ca_bundle` | Certificate file to trust when `server_url` is `https://` with a lab/self-signed certificate (empty = normal certificate checks) |
 | `queue_file`, `log_file` | Local queue and log file (next to `config.json` by default) |
 
 ## Troubleshooting
@@ -68,7 +69,8 @@ To try the file watcher without a server: `python run_agent.py --offline` prints
 | Message | Fix |
 |---|---|
 | `MST server not reachable` | Check the admin laptop IP in `server_url`, that the API runs with `0.0.0.0:8081`, and that Windows Firewall on the laptop allows port 8081 (Phase 10). Events are kept and sent later. |
-| `Device not authorized` | `device_id`/`device_token` do not match. Run `register-agent.php` again and paste the new token. |
+| `Device not authorized` | `device_id`/`device_token` do not match, or the PC was revoked (`register-agent.php --revoke`). Run `register-agent.php` again and paste the new token. |
+| `HTTPS certificate of the MST server is not trusted` | The server uses its own certificate: copy it next to `config.json` and set `"tls_ca_bundle": "mst.crt"` (see `SECURITY.md`). |
 | `Watch folder does not exist and is skipped` | Fix the path in `watch_folders`. |
 | The PC still shows demo values ("10 sec ago", MAC *Unavailable*) | The agent has not connected: run `python run_agent.py --check` on the PC and read the message; make sure the same `device_id` was registered with `register-agent.php`. Then press Ctrl+F5 on the dashboard. |
 | A downloaded file does not appear | The agent must be running (`python run_agent.py`, window open) and the file must be in a folder listed in `watch_folders`. Check `mst_agent.log`. Temporary files (`.crdownload`, `~$...`) are ignored on purpose. |

@@ -101,8 +101,16 @@ final class AgentController
         // Already finished (e.g. a retried request) or not this computer's scan: acknowledge without changes.
         if (!$scan) Response::success('Scan result ignored', ['scanId' => $scanId, 'ignored' => true]);
         $error = is_string($data['error'] ?? null) && preg_match('/^.{0,200}/us', preg_replace('/[\x00-\x1F\x7F<>]/', '', $data['error']) ?? '', $match) ? $match[0] : 'Scan failed on the computer';
-        $verdict = $outcome === 'completed' ? FileRisk::verdict(FileRisk::cleanFindings($data['findings'] ?? []), MySQLRepository::blocklistMatch($sha256 ?? $scan['fileHash'])) : null;
-        $result = MySQLRepository::completeScan($scan, $verdict, $sha256 === null ? null : strtolower($sha256), $durationMs, $verdict ? null : $error);
+        $hash = $sha256 ?? $scan['fileHash'];
+        $reputation = null; $verdict = null;
+        if ($outcome === 'completed') {
+            // Only the SHA-256 is looked up on VirusTotal (cached 24 h); lookup problems never fail the scan.
+            $reputation = $hash !== null && preg_match('/^[0-9a-f]{64}$/i', $hash) ? MySQLRepository::hashReputation($hash) : ['status' => 'unavailable', 'reason' => 'No SHA-256 (file too large to hash)'];
+            $findings = FileRisk::cleanFindings($data['findings'] ?? []);
+            $findings[] = FileRisk::virusTotalFinding($reputation);
+            $verdict = FileRisk::verdict($findings, MySQLRepository::blocklistMatch($hash));
+        }
+        $result = MySQLRepository::completeScan($scan, $verdict, $sha256 === null ? null : strtolower($sha256), $durationMs, $verdict ? null : $error, $reputation);
         Response::success('Scan result recorded', ['scanId' => $scanId, 'status' => $result['status'] ?? null, 'riskLevel' => $result['riskLevel'] ?? null]);
     }
 

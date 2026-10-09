@@ -32,6 +32,7 @@ class AgentConfig:
     queue_file: Path = Path("mst_agent_queue.db")
     log_file: Path = Path("mst_agent.log")
     request_timeout_seconds: int = 10
+    tls_ca_bundle: Path | None = None  # certificate file for an HTTPS server with a self-signed/lab certificate
 
     @property
     def max_hash_bytes(self) -> int:
@@ -106,7 +107,10 @@ def load_config(path: str | Path, require_token: bool = True) -> AgentConfig:
         queue_file=_expand(str(raw.get("queue_file", "mst_agent_queue.db")), base),
         log_file=_expand(str(raw.get("log_file", "mst_agent.log")), base),
         request_timeout_seconds=positive_int("request_timeout_seconds", 10),
+        tls_ca_bundle=_expand(str(raw["tls_ca_bundle"]), base) if raw.get("tls_ca_bundle") else None,
     )
+    if config.tls_ca_bundle is not None and not config.tls_ca_bundle.is_file():
+        errors.append(f"tls_ca_bundle file not found: {config.tls_ca_bundle}")
     if errors:
         raise ConfigError("Invalid config.json:\n  - " + "\n  - ".join(errors))
     return config

@@ -24,7 +24,7 @@ From the project root, in two terminals:
 
 ```powershell
 php -S localhost:8081 backend/public/index.php   # API  -> http://localhost:8081/api
-php -S localhost:8000                            # site -> http://localhost:8000/login.html
+php -S localhost:8000 router.php                 # site -> http://localhost:8000/login.html
 ```
 
 Check the database connection (development only; disabled when `APP_ENV=production`):
@@ -88,4 +88,17 @@ Apply `database/migrations/phase11_files.sql` once (after `phase9_agent.sql`). T
 - **Risk before a scan** comes from the file name only (double extension such as `grades.pdf.exe` → High, programs/scripts → Low).
 - **Scan:** an Admin clicks *Scan*; the agent on that PC picks the job up within a few seconds, re-hashes the file and checks it (double extension, a Windows program disguised as another file type, programs downloaded from the internet via the Windows "Mark of the Web"). The server then checks the SHA-256 against `hash_blocklist` and stores the verdict in `scans`: Critical/High → **THREAT** (a threat record is created and the computer is marked *threat*), Medium → **WARNING**, Low/Safe → **SAFE**. Files are never uploaded; the agent only scans paths inside its watch folders.
 - `hash_blocklist` starts with the harmless **EICAR anti-virus test file**, so a THREAT result can be demonstrated safely. Add known-bad hashes in MySQL Workbench: `INSERT INTO hash_blocklist (sha256, name, severity, source) VALUES ('<sha256>', '<name>', 'HIGH', 'Manual');`. A VirusTotal hash lookup can be added later.
+
+## VirusTotal (Phase 11)
+
+Set `VIRUSTOTAL_API_KEY` in `.env` (free key from virustotal.com). After the agent scans a file, the server looks up the file's SHA-256 (never the file) and adds a finding: 10+ engines → Critical, 3+ → High, 1–2 malicious or 2+ suspicious → Medium, otherwise informational. Results are cached for 24 hours in `hash_reputation` (failed lookups are not cached and are retried next time); lookup problems never fail a scan. On Windows, PHP uses the Windows certificate store for HTTPS; if your PHP build cannot, set `VIRUSTOTAL_CA_BUNDLE` to a CA file (e.g. `cacert.pem`).
+
+## Security (Phase 12)
+
+Apply `database/migrations/phase12_security.sql` once (after `phase11_files.sql`). See `SECURITY.md` for the full list. API behaviour to know when calling it directly:
+
+- Sign-in returns `csrfToken`; `/api/auth/me` returns it again (plus `sessionTimeoutSeconds`). Every POST/PUT/DELETE with a browser session must send it as `X-CSRF-Token`, otherwise `403 CSRF_INVALID`. Agent endpoints use device tokens instead.
+- Too many failed sign-ins → `429 LOGIN_LOCKED` with `Retry-After`. An idle or 12-hour-old session → `401 SESSION_EXPIRED`.
+- Request bodies over 1 MB → `413`. New and changed passwords follow the *Require Strong Password* setting.
+- Tools: `php backend/tools/set-password.php <username>`, `php backend/tools/register-agent.php --revoke <DEVICE-ID>`.
 

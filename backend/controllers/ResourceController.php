@@ -44,7 +44,7 @@ final class ResourceController
     {
         $user = RoleMiddleware::allowModule(self::MODULES[$resource]);
         $data = Validation::body();
-        Validation::resource($data, $resource);
+        Validation::resource($data, $resource, false, self::strongPasswords());
         $item = self::guardDuplicates(fn() => MySQLRepository::create($resource, $data));
         [$action, $type] = self::ACCOUNT_LABELS[$resource];
         MySQLRepository::log((int)$user['id'], $action . '_CREATED', "Created $type {$item['username']}", $type, (string)$item['id']);
@@ -55,9 +55,11 @@ final class ResourceController
     {
         $user = RoleMiddleware::allowModule(self::MODULES[$resource]);
         $validatedId = Validation::id($id);
-        if (!MySQLRepository::find($resource, $validatedId)) Response::error('Resource not found', 'NOT_FOUND', 404);
+        $existing = MySQLRepository::find($resource, $validatedId);
+        if (!$existing) Response::error('Resource not found', 'NOT_FOUND', 404);
         $data = Validation::body();
-        Validation::resource($data, $resource, true);
+        // The password rule also checks the username, so use the account's current one when it is not being changed.
+        Validation::resource($data + ['username' => $existing['username']], $resource, true, self::strongPasswords());
         if (isset($data['status']) && $data['status'] !== 'Active' && ($validatedId === 1 || $validatedId === (int)$user['id'])) Response::error('This account cannot be deactivated', 'ACCOUNT_PROTECTED', 403);
         $item = self::guardDuplicates(fn() => MySQLRepository::update($resource, $validatedId, $data));
         // Only field names are logged, never values (so passwords never reach the audit log).
@@ -79,6 +81,9 @@ final class ResourceController
         MySQLRepository::log((int)$user['id'], $action . '_DELETED', "Deleted $type {$item['username']}", $type, (string)$validatedId);
         Response::success('Resource deleted', null);
     }
+
+    // "Require Strong Password" setting: on unless explicitly turned off.
+    private static function strongPasswords(): bool { return MySQLRepository::setting('strongPassword') !== '0'; }
 
     private static function guardDuplicates(callable $write): array
     {

@@ -7,7 +7,7 @@ require_once __DIR__ . '/../repositories/MySQLRepository.php';
 
 final class HealthController
 {
-    private const TABLES = ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events', 'hash_blocklist'];
+    private const TABLES = ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events', 'hash_blocklist', 'hash_reputation'];
 
     // Development-only: disabled when APP_ENV=production. Never returns credentials, DSNs, paths or stack traces.
     public static function database(string $method): never

@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const pathPrefix = window.location.pathname.includes('/management/') ? '../' : '';
   const isAppPage = Boolean(document.getElementById('sidebar'));
   const toFrontendRole = (serverRole) => ({ 'Super Admin': 'superadmin', Admin: 'admin' }[serverRole] || null);
-  const redirectToLogin = () => { sessionStorage.removeItem('mstRole'); window.location.replace(`${pathPrefix}login.html`); };
+  const redirectToLogin = (expired = false) => { sessionStorage.removeItem('mstRole'); window.location.replace(`${pathPrefix}login.html${expired ? '?expired=1' : ''}`); };
   const role = sessionStorage.getItem('mstRole');
 
   // Pages behind the sidebar require a signed-in Super Admin or Admin; the server session is the source of truth.
@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (serverRole !== role) { sessionStorage.setItem('mstRole', serverRole); window.location.reload(); return; }
       mstLoadNotifications();
     }).catch((error) => {
-      if (error.status === 401) redirectToLogin();
+      if (error.status === 401) window.MSTApi.sessionEnded(error.payload?.error?.code);
       // Other failures (API offline) keep the current view; every API request is still authorized server-side.
     });
   }
@@ -334,6 +334,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const loginForm = document.getElementById('loginForm');
+  if (loginForm && new URLSearchParams(window.location.search).get('expired') === '1') {
+    const notice = document.createElement('p');
+    notice.className = 'form-error';
+    notice.setAttribute('role', 'status');
+    notice.textContent = 'Your session expired after a period of inactivity. Please sign in again.';
+    loginForm.prepend(notice);
+  }
   if (loginForm) {
     loginForm.addEventListener('submit', (event) => {
       event.preventDefault();

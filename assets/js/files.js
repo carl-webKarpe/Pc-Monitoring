@@ -104,9 +104,22 @@ async function loadFiles({ quiet = false } = {}) {
   if (fileState.openId !== null) showFileDetails(fileState.openId, { refresh: true });
 }
 
+function scanDetailsOf(scan) {
+  try { return scan?.scanDetails ? JSON.parse(scan.scanDetails) : null; } catch { return null; }
+}
+
+// "12 / 70 engines" with a link to the full VirusTotal report (only the file's SHA-256 is ever sent).
+function virusTotalSummary(scan) {
+  const vt = scanDetailsOf(scan)?.virusTotal;
+  if (!vt) return 'Not checked';
+  if (vt.status === 'found') return `${fileEsc(vt.malicious)} / ${fileEsc(vt.total)} engines flagged it · <a class="text-link" href="${fileEsc(vt.link)}" target="_blank" rel="noopener noreferrer">View report</a>`;
+  if (vt.status === 'not_found') return 'Unknown to VirusTotal';
+  if (vt.status === 'not_configured') return 'Not configured';
+  return `Unavailable${vt.reason ? ` (${fileEsc(vt.reason)})` : ''}`;
+}
+
 function scanFindings(scan) {
-  let details = null;
-  try { details = scan.scanDetails ? JSON.parse(scan.scanDetails) : null; } catch { details = null; }
+  const details = scanDetailsOf(scan);
   if (!details) return '';
   if (details.error) return `<p><time>FAILED</time> ${fileEsc(details.error)}</p>`;
   if (!details.findings?.length) return '<p><time>SAFE</time> No risk indicators found.</p>';
@@ -145,6 +158,7 @@ async function showFileDetails(id, { refresh = false } = {}) {
       <div><span>Classification</span><strong>${fileClassBadge(file)}</strong>${suggestion}</div>
       <div><span>Status</span><strong>${fileStatusBadge(file)}</strong></div>
       <div><span>Last Scan</span><strong>${latest ? fileEsc(mstFormatDate(latest.completedAt || latest.createdAt)) : 'Never'}</strong></div>
+      <div><span>VirusTotal</span><strong>${latest ? virusTotalSummary(latest) : 'Not checked'}</strong></div>
       <div class="file-wide"><span>SHA-256</span><strong>${fileEsc(file.sha256 || 'Not available (file too large or deleted)')}</strong></div>
     </div>
     <div class="relationship-panel"><h4>DETECTED ON</h4><strong>${fileEsc(file.computerHostname)}</strong><p>Device ID: ${fileEsc(file.computerDeviceId)} · IP: ${fileEsc(file.computerIpAddress)}</p><a class="text-link" href="computers.html">View Computer <i class="fa-solid fa-arrow-right"></i></a></div>

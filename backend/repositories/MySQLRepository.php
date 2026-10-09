@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/Database.php';
 require_once __DIR__ . '/../helpers/FileRisk.php';
+require_once __DIR__ . '/../helpers/VirusTotal.php';
 
 final class MySQLRepository
 {
@@ -99,8 +100,30 @@ final class MySQLRepository
     }
     public static function savePermissions(string $role, array $permissions): array { $statement = self::db()->prepare('INSERT INTO permissions (role, module, allowed) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE allowed = VALUES(allowed)'); foreach ($permissions as $module => $allowed) $statement->execute([$role, (string)$module, $allowed ? 1 : 0]); self::$permissionCache = []; return self::permissions(); }
 
+    private static array $settingCache = [];
+    public static function setting(string $key): ?string
+    {
+        if (!array_key_exists($key, self::$settingCache)) { $statement = self::db()->prepare('SELECT setting_value FROM settings WHERE setting_key = ?'); $statement->execute([$key]); $value = $statement->fetchColumn(); self::$settingCache[$key] = $value === false ? null : (string)$value; }
+        return self::$settingCache[$key];
+    }
+
+    /** Failed logins in the last $minutes for this account (since its last successful login) and for this IP address. @return array{0: int, 1: int} */
+    public static function recentLoginFailures(?int $userId, ?string $ip, int $minutes): array
+    {
+        $byAccount = 0; $byIp = 0;
+        if ($userId !== null) {
+            $statement = self::db()->prepare("SELECT COUNT(*) FROM activity_logs WHERE action = 'LOGIN_FAILED' AND user_id = ? AND created_at > NOW() - INTERVAL ? MINUTE AND id > COALESCE((SELECT MAX(id) FROM activity_logs WHERE action = 'LOGIN' AND user_id = ?), 0)");
+            $statement->execute([$userId, $minutes, $userId]); $byAccount = (int)$statement->fetchColumn();
+        }
+        if ($ip !== null) {
+            $statement = self::db()->prepare("SELECT COUNT(*) FROM activity_logs WHERE action = 'LOGIN_FAILED' AND ip_address = ? AND created_at > NOW() - INTERVAL ? MINUTE");
+            $statement->execute([$ip, $minutes]); $byIp = (int)$statement->fetchColumn();
+        }
+        return [$byAccount, $byIp];
+    }
+
     public static function settings(): array { $result = []; foreach (self::db()->query('SELECT setting_key, setting_value FROM settings')->fetchAll() as $row) $result[$row['setting_key']] = $row['setting_value']; return $result; }
-    public static function saveSettings(array $settings): array { $statement = self::db()->prepare('INSERT INTO settings (category, setting_key, setting_value) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = CURRENT_TIMESTAMP'); foreach ($settings as $key => [$category, $value]) $statement->execute([$category, $key, $value]); return self::settings(); }
+    public static function saveSettings(array $settings): array { $statement = self::db()->prepare('INSERT INTO settings (category, setting_key, setting_value) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = CURRENT_TIMESTAMP'); foreach ($settings as $key => [$category, $value]) $statement->execute([$category, $key, $value]); self::$settingCache = []; return self::settings(); }
 
     // ---- Agent (Phase 9) -------------------------------------------------------------------------------
 
@@ -140,6 +163,10 @@ final class MySQLRepository
         } catch (Throwable $exception) { $db->rollBack(); throw $exception; }
         return [$accepted, count($events) - $accepted];
     }
+
+    public static function setPassword(int $userId, string $password): void { self::db()->prepare('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?')->execute([password_hash($password, PASSWORD_DEFAULT), $userId]); }
+
+    public static function revokeAgent(int $computerId): void { self::db()->prepare("UPDATE computers SET agent_token_hash = NULL, agent_status = 'disconnected', status = 'offline' WHERE id = ?")->execute([$computerId]); }
 
     /** Creates the computer if needed and stores a new agent token hash. @return array{0: int, 1: bool, 2: bool} [computer id, created, replaced an existing token] */
     public static function registerAgent(string $deviceId, string $hostname, string $ipAddress, string $tokenHash): array
@@ -188,6 +215,23 @@ final class MySQLRepository
 
     public static function findPendingScan(int $scanId, int $computerId): ?array { return self::fetchOne("SELECT s.*, c.hostname AS computer_hostname FROM scans s JOIN computers c ON c.id = s.computer_id WHERE s.id = ? AND s.computer_id = ? AND s.status = 'PENDING'", [$scanId, $computerId]); }
 
+    /** VirusTotal reputation of a hash, cached for 24 hours (lookups that failed are not cached). */
+    public static function hashReputation(string $sha256): array
+    {
+        $sha256 = strtolower($sha256);
+        $statement = self::db()->prepare('SELECT * FROM hash_reputation WHERE sha256 = ? AND checked_at > NOW() - INTERVAL 1 DAY');
+        $statement->execute([$sha256]);
+        if ($row = $statement->fetch()) {
+            return ['status' => $row['status'], 'malicious' => (int)$row['malicious'], 'suspicious' => (int)$row['suspicious'], 'harmless' => (int)$row['harmless'], 'undetected' => (int)$row['undetected'], 'total' => (int)$row['total'], 'name' => $row['name'], 'link' => VirusTotal::link($sha256), 'cached' => true];
+        }
+        $result = VirusTotal::lookup($sha256);
+        if (in_array($result['status'], ['found', 'not_found'], true)) {
+            self::db()->prepare('INSERT INTO hash_reputation (sha256, status, malicious, suspicious, harmless, undetected, total, name, checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE status = VALUES(status), malicious = VALUES(malicious), suspicious = VALUES(suspicious), harmless = VALUES(harmless), undetected = VALUES(undetected), total = VALUES(total), name = VALUES(name), checked_at = VALUES(checked_at)')
+                ->execute([$sha256, $result['status'], $result['malicious'] ?? 0, $result['suspicious'] ?? 0, $result['harmless'] ?? 0, $result['undetected'] ?? 0, $result['total'] ?? 0, $result['name'] ?? null]);
+        }
+        return $result;
+    }
+
     public static function blocklistMatch(?string $sha256): ?array
     {
         if ($sha256 === null) return null;
@@ -200,12 +244,12 @@ final class MySQLRepository
      * Stores a finished scan: updates the scan and its file event, and records a threat for THREAT results.
      * @param ?array $verdict FileRisk::verdict() result, or null when the scan failed
      */
-    public static function completeScan(array $scan, ?array $verdict, ?string $sha256, int $durationMs, ?string $error): array
+    public static function completeScan(array $scan, ?array $verdict, ?string $sha256, int $durationMs, ?string $error, ?array $reputation = null): array
     {
         $db = self::db();
         $status = $verdict['status'] ?? 'FAILED';
         $risk = $verdict['risk'] ?? 'Unknown';
-        $details = json_encode($verdict ? ['findings' => $verdict['findings']] : ['error' => $error], JSON_UNESCAPED_SLASHES);
+        $details = json_encode(($verdict ? ['findings' => $verdict['findings']] : ['error' => $error]) + ($reputation ? ['virusTotal' => $reputation] : []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $duration = number_format($durationMs / 1000, 1) . ' sec';
         $db->beginTransaction();
         try {
@@ -224,5 +268,5 @@ final class MySQLRepository
         return self::find('scans', (int)$scan['id']) ?? [];
     }
 
-    public static function tableAccessible(string $table): bool { if (!in_array($table, ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events', 'hash_blocklist'], true)) return false; self::db()->query("SELECT 1 FROM `$table` LIMIT 1")->fetchAll(); return true; }
+    public static function tableAccessible(string $table): bool { if (!in_array($table, ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events', 'hash_blocklist', 'hash_reputation'], true)) return false; self::db()->query("SELECT 1 FROM `$table` LIMIT 1")->fetchAll(); return true; }
 }

@@ -68,6 +68,24 @@ final class FileRisk
         return ['status' => $rank >= 3 ? 'THREAT' : ($rank === 2 ? 'WARNING' : 'SAFE'), 'risk' => self::RISK_BY_RANK[$rank], 'threatCount' => $threats, 'findings' => $findings, 'top' => $top];
     }
 
+    /** Turns a VirusTotal result into a scan finding. Lookup problems are informational and never fail a scan. */
+    public static function virusTotalFinding(array $vt): array
+    {
+        $status = $vt['status'] ?? 'unavailable';
+        if ($status === 'found') {
+            $malicious = (int)($vt['malicious'] ?? 0); $suspicious = (int)($vt['suspicious'] ?? 0); $total = (int)($vt['total'] ?? 0);
+            $severity = $malicious >= 10 ? 'CRITICAL' : ($malicious >= 3 ? 'HIGH' : ($malicious >= 1 || $suspicious >= 2 ? 'MEDIUM' : 'INFO'));
+            $detail = "$malicious of $total security vendors flagged this file as malicious" . ($suspicious ? " ($suspicious suspicious)" : '');
+            return ['rule' => 'virustotal', 'title' => $severity === 'INFO' ? 'VirusTotal: no detections' : 'VirusTotal detections', 'severity' => $severity, 'detail' => $detail];
+        }
+        $detail = match ($status) {
+            'not_found' => 'This file hash is not known to VirusTotal',
+            'not_configured' => 'VirusTotal is not configured (add VIRUSTOTAL_API_KEY to .env)',
+            default => 'VirusTotal lookup unavailable: ' . ($vt['reason'] ?? 'unknown error'),
+        };
+        return ['rule' => 'virustotal', 'title' => 'VirusTotal', 'severity' => 'INFO', 'detail' => $detail];
+    }
+
     /** Validates findings sent by an agent: known rules only, severity capped at the rule's maximum. */
     public static function cleanFindings(mixed $findings): array
     {

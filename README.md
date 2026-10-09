@@ -2,47 +2,36 @@
 
 Monitoring System Threat (MST) is a frontend-only cybersecurity monitoring platform prototype for a capstone project. It provides a public landing page, role-aware login flow, SOC dashboard, authorized computer monitoring views, threat oversight, and file scanning workflows.
 
-## Demo Login Credentials
+## Accounts and Roles
 
-These credentials are for frontend demonstration only. They are not secure authentication and will be replaced by server-side authentication later.
+`database/seed.sql` creates two accounts, **superadmin** (Super Admin) and **admin** (Admin). Set your own strong passwords right after installing, on the MST server:
+
+```powershell
+php backend/tools/set-password.php superadmin
+php backend/tools/set-password.php admin
+```
+
+Passwords are never stored or documented in plain text; only `password_hash()` values are kept in MySQL. (If you installed an earlier version of MST, the old demo passwords keep working until you change them.)
 
 ### Super Admin
 
-```text
-Username: superadmin
-Password: SuperAdmin@123
-Role: Super Admin
-```
-
-Permissions:
-
 - Monitor authorized PCs and view network activity
-- View computer information and threats
-- View scan history and scan results
-- Manage and add administrators
-- Manage and add users
+- View computer information, threats, detected files, scan history and scan results
+- Manage and add administrators and users, and role permissions
 - View reports and activity logs
 - Manage system settings
 
-Does not have access to `File Scanner`.
+Does not have access to the `File Scanner` (and therefore cannot start file scans).
 
 ### Admin
 
-```text
-Username: admin
-Password: Admin@123
-Role: Admin
-```
-
-Permissions:
-
 - Monitor authorized PCs and view network activity
-- View computer information and threats
+- View computer information, threats and detected files
 - Scan files and view scan history
 - View reports and activity logs
-- Access appropriate system settings
+- Access system settings
 
-Does not have access to `Admin Management` or `User Management`.
+Does not have access to `Admin Management`, `User Management` or `Permissions`.
 
 ## Frontend Role Notes
 
@@ -158,7 +147,7 @@ Current limitations:
 - No Python Agent or LAN monitoring
 - No real malware/file scanning engine
 - No VirusTotal integration
-- Demo credentials are **DEMO ONLY - NOT FOR PRODUCTION**
+- Accounts must be given your own passwords (`backend/tools/set-password.php`)
 
 MySQL integration is planned for Phase 7.
 
@@ -178,7 +167,7 @@ mysql -u root -p mst_database < database/seed.sql
 
 For a complete reset and reseed from the project root, run `mysql -u root -p < database/reset.sql` in the MySQL command-line client. `SOURCE` commands in the reset script are MySQL-client commands; do not paste that file into phpMyAdmin. This deletes all local MST data, so use it only during development. For phpMyAdmin, import `schema.sql` first and then `seed.sql` separately.
 
-To run the project, start the API with `php -S localhost:8081 backend/public/index.php` and serve the site with `php -S localhost:8000` from the project root, then open `http://localhost:8000/login.html`. Check the database connection at `http://localhost:8081/api/health/database`. Full API details are in [backend/README.md](backend/README.md).
+To run the project, start the API with `php -S localhost:8081 backend/public/index.php` and serve the site with `php -S localhost:8000 router.php` from the project root (the router serves only the website's files and blocks `.env`, `backend/`, `database/` and `agent/`), then open `http://localhost:8000/login.html`. Check the database connection at `http://localhost:8081/api/health/database`. Full API details are in [backend/README.md](backend/README.md).
 
 The dashboard, Computer Monitoring, Threats, Scan History, Reports, Activity Logs, Settings, User/Admin Management and Permissions pages now read MySQL data through the API. If the API cannot be reached, those pages fall back to their built-in demo data and show an "API unavailable" notice.
 
@@ -211,7 +200,7 @@ Future implementation:
 - Audit logging
 - Persistent system settings
 
-The credentials documented above are **DEMO ONLY - NOT FOR PRODUCTION**.
+Set your own account passwords with `backend/tools/set-password.php` before using MST.
 
 ## Phases 8–9 - Monitoring Agent and Agent API
 
@@ -222,4 +211,12 @@ Existing databases: run `database/migrations/phase9_agent.sql` once. Register ea
 ## Phase 11 - Detected Files and On-PC Scanning
 
 The **Detected Files** page (Threat Management) shows every file the agents report, with activity, size, date, risk level and classification (MST suggests *Possibly confidential*; the admin confirms Confidential or Normal). An Admin can request a scan; the agent on that PC checks the file locally, the server adds a hash-blocklist check, and the result is stored in `scans` (THREAT results also create a threat). Super Admin can view and classify files but, as with the File Scanner, cannot scan. Existing databases: run `database/migrations/phase11_files.sql` once after `phase9_agent.sql`.
+
+## Phase 11 - VirusTotal
+
+When a file is scanned, the server also looks up its **SHA-256** on VirusTotal (only the hash is sent, never the file) and shows how many security vendors flag it, with a link to the report. Results are cached for 24 hours. Add a free API key as `VIRUSTOTAL_API_KEY` in `.env`; without a key, scans work as before and show "VirusTotal not configured".
+
+## Phase 12 - Security Hardening
+
+Login lockout, idle session timeout, CSRF protection, strong passwords, security headers, web-folder protection, device-token revocation and security logging. See [SECURITY.md](SECURITY.md) for every measure, how to test it, and how to enable HTTPS. Existing databases: run `database/migrations/phase12_security.sql` once after `phase11_files.sql`.
 

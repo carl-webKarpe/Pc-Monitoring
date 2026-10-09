@@ -10,7 +10,7 @@ function mst_apply_cors(): void
         header('Access-Control-Allow-Origin: ' . $origin);
         header('Access-Control-Allow-Credentials: true');
     }
-    header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
+    header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, X-CSRF-Token');
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
     header('Vary: Origin');
 }

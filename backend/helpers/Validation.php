@@ -1,13 +1,19 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/Security.php';
+
 final class Validation
 {
     public const ACCOUNT_STATUSES = ['Active', 'Inactive', 'Suspended'];
 
+    public const MAX_BODY_BYTES = 1048576; // 1 MB is far more than any MST request needs
+
     public static function body(): array
     {
-        $raw = file_get_contents('php://input');
+        if ((int)($_SERVER['CONTENT_LENGTH'] ?? 0) > self::MAX_BODY_BYTES) Response::error('Request too large', 'PAYLOAD_TOO_LARGE', 413);
+        $raw = file_get_contents('php://input', false, null, 0, self::MAX_BODY_BYTES + 1);
+        if ($raw !== false && strlen($raw) > self::MAX_BODY_BYTES) Response::error('Request too large', 'PAYLOAD_TOO_LARGE', 413);
         if ($raw === false || trim($raw) === '') return [];
         $data = json_decode($raw, true);
         if (!is_array($data)) Response::error('Invalid JSON body', 'INVALID_JSON', 400);
@@ -29,7 +35,7 @@ final class Validation
     public static function login(array $data): void { self::required($data, ['username', 'password']); }
 
     // Create requires every account field; update ($partial) validates only the fields that were sent.
-    public static function resource(array $data, string $resource, bool $partial = false): void
+    public static function resource(array $data, string $resource, bool $partial = false, bool $strongPassword = true): void
     {
         if (!$partial) self::required($data, ['firstName', 'lastName', 'email', 'username', 'password']);
         $errors = [];
@@ -39,7 +45,7 @@ final class Validation
         if (isset($data['middleName']) && self::length(trim((string)$data['middleName'])) > 80) $errors['middleName'] = 'middleName must be at most 80 characters';
         if (isset($data['email']) && (!filter_var((string)$data['email'], FILTER_VALIDATE_EMAIL) || strlen((string)$data['email']) > 190)) $errors['email'] = 'Email is invalid';
         if (isset($data['username']) && !preg_match('/^[A-Za-z0-9._-]{3,40}$/', (string)$data['username'])) $errors['username'] = 'Username must be 3-40 characters';
-        if ((!$partial || (isset($data['password']) && $data['password'] !== '')) && strlen((string)$data['password']) < 8) $errors['password'] = 'Password must be at least 8 characters';
+        if ((!$partial || (isset($data['password']) && $data['password'] !== '')) && ($problem = Security::passwordProblem((string)$data['password'], (string)($data['username'] ?? ''), $strongPassword)) !== null) $errors['password'] = $problem;
         if (isset($data['status']) && !in_array($data['status'], self::ACCOUNT_STATUSES, true)) $errors['status'] = 'Status must be Active, Inactive, or Suspended';
         if ($resource === 'users' && isset($data['role']) && $data['role'] !== 'Tenant') $errors['role'] = 'User role must be Tenant';
         if ($resource === 'admins' && isset($data['role']) && $data['role'] !== 'Admin') $errors['role'] = 'New administrators must use the Admin role';

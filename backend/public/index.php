@@ -24,6 +24,11 @@ mst_apply_cors();
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: no-referrer');
+// API responses are data only: never cached, never rendered as a page, never framed.
+header('Cache-Control: no-store');
+header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'");
+header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+if (mst_is_https()) header('Strict-Transport-Security: max-age=31536000');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
 set_exception_handler(static function (Throwable $exception): never { error_log($exception->getMessage()); Response::error('Internal server error', 'INTERNAL_ERROR', 500); });

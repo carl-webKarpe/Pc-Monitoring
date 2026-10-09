@@ -20,7 +20,11 @@ final class RoleMiddleware
     {
         $user = AuthMiddleware::requireAuth();
         // A missing permissions row falls back to the policy; a row set to 0 revokes the module.
-        if (!self::policyAllows($user['role'], $module) || MySQLRepository::permissionFor($user['role'], $module) === false) Response::error('Forbidden', 'FORBIDDEN', 403);
+        if (!self::policyAllows($user['role'], $module) || MySQLRepository::permissionFor($user['role'], $module) === false) {
+            $request = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') . ' ' . (parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '');
+            MySQLRepository::log((int)$user['id'], 'ACCESS_DENIED', "{$user['role']} tried to use $module ($request)", 'module', $module);
+            Response::error('Forbidden', 'FORBIDDEN', 403);
+        }
         return $user;
     }
 }

@@ -27,6 +27,7 @@ STABLE_CHECKS = 2          # size must be unchanged for this many consecutive ch
 CHECK_INTERVAL = 1.0       # seconds between size checks
 MAX_WAIT_SECONDS = 300     # give up waiting for very slow downloads after 5 minutes
 HASH_CHUNK = 1024 * 1024
+VANISHED_MEMORY_SECONDS = 15  # a file that appeared and vanished unreported: ignore its delete for this long
 WORKERS = 4                # new files are checked in parallel so a burst of files is not delayed
 
 
@@ -58,6 +59,7 @@ class FileMonitor:
         self.on_event = on_event
         self._own_files = {config.queue_file.resolve(), config.log_file.resolve()}
         self._pending: set[str] = set()
+        self._vanished: dict[str, float] = {}  # path -> time it vanished before it was ever reported
         self._pending_lock = threading.Lock()
         self._work: queue.Queue[tuple[Path, str] | None] = queue.Queue()
         self._observer = Observer()
@@ -111,9 +113,11 @@ class FileMonitor:
         if self.is_ignored(path):
             return
         with self._pending_lock:
-            if str(path) in self._pending:
-                # Still being checked as a new file (e.g. Firefox's placeholder replaced by the finished
-                # download, or a short-lived temp file): the worker reports it only if it still exists.
+            vanished_at = self._vanished.pop(str(path), None)
+            if str(path) in self._pending or (vanished_at is not None and time.monotonic() - vanished_at < VANISHED_MEMORY_SECONDS):
+                # The file was never reported as new: either it is still being checked (the worker reports it
+                # only if it still exists) or it already vanished unreported (Firefox's placeholder replaced by
+                # the finished download, a short-lived temp file). Reporting its deletion would be a false alarm.
                 return
         self._emit("deleted", path, detected_at=utc_now())
 
@@ -125,7 +129,12 @@ class FileMonitor:
             path, detected_at = item
             try:
                 size = self._wait_until_stable(path)
-                if size is not None:
+                if size is None:
+                    with self._pending_lock:
+                        now = time.monotonic()
+                        self._vanished = {key: at for key, at in self._vanished.items() if now - at < VANISHED_MEMORY_SECONDS}
+                        self._vanished[str(path)] = now
+                else:
                     self._emit("created", path, detected_at=detected_at, size=size, sha256=sha256_of(path, self.config.max_hash_bytes))
             except Exception:  # never let one bad file stop the monitor
                 log.exception("Could not process new file %s", path)
