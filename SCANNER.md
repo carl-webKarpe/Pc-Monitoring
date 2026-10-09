@@ -75,6 +75,7 @@ source, date range), sorting and paging.
 
 ### 1. Database (once)
 Run `database/migrations/phase13_scanner.sql` in MySQL Workbench (after `phase12_security.sql`).
+If it stopped with an error (for example *Error Code: 1175 … safe update mode*, or *Duplicate column name* on a second run), run `database/migrations/phase13_repair.sql`: it finishes the update and is safe to run any number of times.
 
 ### 2. PHP upload limit (MST server)
 PHP accepts only 2 MB uploads by default. Open your `php.ini` (`php --ini` shows where it is) and set:

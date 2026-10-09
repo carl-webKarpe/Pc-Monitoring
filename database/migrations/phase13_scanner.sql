@@ -1,7 +1,10 @@
 -- Phase 13: real file scanner (antivirus engines + VirusTotal), honest risk levels, quarantine, upload scanning.
 -- Run ONCE on an existing mst_database, AFTER phase12_security.sql (MySQL Workbench: open this file, then Execute).
+-- If it stopped with an error part-way, run phase13_repair.sql instead (safe to run again).
 -- It only adds columns, allowed values, a table and settings; existing data is kept (nothing is deleted).
 USE mst_database;
+-- MySQL Workbench blocks UPDATE statements without a key in safe-update mode (Error 1175); allow them for this script.
+SET SQL_SAFE_UPDATES = 0;
 
 -- Scans: lifecycle (scan_state) is separate from the risk result (risk_level), plus the evidence behind it.
 ALTER TABLE scans
@@ -24,7 +27,7 @@ ALTER TABLE scans
   ADD INDEX idx_scans_created (created_at),
   ADD INDEX idx_scans_hash (file_hash(64));
 
-UPDATE scans SET scan_state = CASE status WHEN 'PENDING' THEN 'Pending' WHEN 'FAILED' THEN 'Failed' ELSE 'Completed' END;
+UPDATE scans SET scan_state = CASE status WHEN 'PENDING' THEN 'Pending' WHEN 'FAILED' THEN 'Failed' ELSE 'Completed' END WHERE scanner IS NULL AND detection IS NULL;
 -- Results recorded before Phase 13 came from file-name rules and hash lookups only (no antivirus engine).
 UPDATE scans SET detection = 'Recorded before Phase 13 (no antivirus engine result)', evidence_strength = 'N/A' WHERE scan_state = 'Completed' AND detection IS NULL;
 -- The two example rows from seed.sql are not real scans. They are labelled, not deleted. To remove them yourself:
@@ -73,3 +76,4 @@ CREATE TABLE IF NOT EXISTS quarantine_items (
 
 -- Scanner settings (Admin): scan new files automatically; keep uploaded files for "Scan Again" this long.
 INSERT IGNORE INTO settings (category, setting_key, setting_value) VALUES ('scanner', 'autoScan', '1'), ('scanner', 'uploadRetention', '7 days');
+SET SQL_SAFE_UPDATES = 1;
