@@ -4,50 +4,68 @@ A small Python program that runs on each **authorized** lab computer. It:
 
 - identifies the computer to the MST server with a device ID and a private device token;
 - sends a **heartbeat** every 30 seconds (online status, hostname, IP, MAC, Windows version, CPU, memory, disk);
-- watches **only the folders you list** (by default Downloads, Desktop, Documents) and reports **new** and **deleted** files: name, location, size, time and SHA-256 fingerprint;
+- watches **only the folders you list** (by default Downloads, Desktop, Documents) and reports **new, modified, renamed and deleted** files: name, location, size, time, SHA-256 fingerprint and download evidence;
 - keeps events in a local queue (`mst_agent_queue.db`) when the server cannot be reached and sends them later.
 
-When an Admin clicks **Scan** on the Detected Files page, the agent re-checks that file on this PC and reports the result (see `backend/README.md`, Phase 11). It only scans files inside its watch folders.
+New files are scanned on this PC (antivirus engines + static analysis) automatically or when an Admin clicks **Scan**; see *Scanning and quarantine* below. It only scans files inside its watch folders.
 
 It does **not** upload file contents, record keystrokes, capture the screen, control the computer, or hide itself. It runs as a normal visible program and writes everything it does to `mst_agent.log`.
 
-## 1. On the MST server (admin laptop) — once per lab PC
+## 1. On the MST server (admin laptop) — once
 
-1. Apply the Phase 9 migration once (MySQL Workbench → open `database/migrations/phase9_agent.sql` → Execute).
-2. Start the API so the lab PCs can reach it over the LAN:
+1. Find the laptop's IP address: run `ipconfig` and note the **IPv4 Address** (e.g. `192.168.1.10`).
+2. Set the network to **Private**: Settings → Network & Internet → Wi-Fi (or Ethernet) → your network → *Private*.
+3. Allow lab PCs to reach the API (PowerShell **as administrator**, once):
+   ```powershell
+   New-NetFirewallRule -DisplayName "MST API 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow -Profile Private
+   ```
+4. Start the API so the lab PCs can reach it over the LAN (`0.0.0.0` = all network cards):
    ```powershell
    cd C:\xampp1\htdocs\monitoring
    php -S 0.0.0.0:8081 backend/public/index.php
    ```
-3. Register the lab PC (use a unique device ID for each PC):
+5. Register each lab PC with its own device ID:
    ```powershell
-   php backend/tools/register-agent.php MST-PC-002 LAB-PC-02 192.168.1.21
+   php backend/tools/register-agent.php MST-PC-003 LAB-PC-03
    ```
-   Copy the `device_id` and `device_token` it prints. The token is shown only once; running the command again issues a new token.
+   Copy the `device_token` it prints. The token is shown only once; running the command again issues a new token.
 
 ## 2. On each lab PC
 
-1. Install **Python 3.10+** from python.org (tick "Add python.exe to PATH").
+1. Install **Python 3.10+** from python.org (tick **"Add python.exe to PATH"**).
 2. Copy the `agent` folder to the PC, e.g. `C:\MST\agent`.
-3. Install the three libraries:
+3. Check that the PC can reach the server: open `http://192.168.1.10:8081/api/` (the laptop's IP) in a browser. It must show `"message":"MST API"`.
+4. Install the agent in its own Python environment:
    ```powershell
    cd C:\MST\agent
-   python -m pip install -r requirements.txt
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   copy config.example.json config.json
+   notepad config.json
    ```
-4. Copy `config.example.json` to `config.json` and edit it:
+5. In `config.json` set:
    - `server_url`: `http://<admin-laptop-IP>:8081/api` (e.g. `http://192.168.1.10:8081/api`)
-   - `device_id` and `device_token`: from step 1.3
-   - `watch_folders`: the folders to monitor. `{Downloads}`, `{Desktop}` and `{Documents}` use the folders' real locations from Windows, so they also work when OneDrive has moved Desktop/Documents. You can also list full paths (`%USERPROFILE%` means the logged-in user's folder); a missing folder under the user profile is looked up in OneDrive automatically.
-5. Test the connection (sends one heartbeat and exits):
+   - `device_id` and `device_token`: from step 1.5
+   - `watch_folders`: the folders to monitor. `{Downloads}`, `{Desktop}` and `{Documents}` use the folders' real locations from Windows, so they also work when OneDrive has moved Desktop/Documents. You can also list full paths (`%USERPROFILE%` means the logged-in user's folder).
+6. Test the connection (sends one heartbeat and exits):
    ```powershell
    python run_agent.py --check
    ```
    `Heartbeat accepted by the MST server.` means it works; the PC now shows as online on the dashboard.
-6. Run the agent:
-   ```powershell
-   python run_agent.py
-   ```
-   Keep the window open. Press **Ctrl+C** to stop it.
+7. Run the agent: double-click **`start-agent.bat`** (or `python run_agent.py`). Keep the window open; close it or press **Ctrl+C** to stop. Only one agent can run at a time: a second copy says *Another MST agent is already running* and exits.
+
+## 3. Start automatically when someone signs in (recommended)
+
+In PowerShell, in the agent folder:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
+```
+It checks the connection first, then creates the Windows scheduled task **"MST Monitoring Agent"**, which starts `start-agent.bat` every time **this Windows user** signs in (the agent watches that user's Downloads, Desktop and Documents, so install it while signed in as the account students use). If the agent stops unexpectedly, the window restarts it after 30 seconds.
+
+- The agent window stays **visible** (titled *MST Monitoring Agent*): lab monitoring is never hidden. You can minimize it.
+- To remove the automatic start: `powershell -ExecutionPolicy Bypass -File .\uninstall-autostart.ps1`
+- Several Windows accounts on one PC: run the install script once while signed in to each account (each account's agent uses the same `config.json`; only one runs at a time).
 
 To try the file watcher without a server: `python run_agent.py --offline` prints each event on screen.
 
@@ -80,6 +98,8 @@ To try the file watcher without a server: `python run_agent.py --offline` prints
 
 | Message | Fix |
 |---|---|
+| `Another MST agent is already running` | An agent is already running on this PC (check the taskbar for the *MST Monitoring Agent* window). Only one copy runs at a time. |
+| The lab PC cannot open `http://<laptop-IP>:8081/api/` | Check the laptop IP with `ipconfig` (it can change), that the API runs with `0.0.0.0:8081`, the firewall rule (section 1.3) and that the network is *Private*. School Wi-Fi often blocks PC-to-PC traffic: use a phone hotspot or a small router. |
 | `MST server not reachable` | Check the admin laptop IP in `server_url`, that the API runs with `0.0.0.0:8081`, and that Windows Firewall on the laptop allows port 8081 (Phase 10). Events are kept and sent later. |
 | `Device not authorized` | `device_id`/`device_token` do not match, or the PC was revoked (`register-agent.php --revoke`). Run `register-agent.php` again and paste the new token. |
 | `HTTPS certificate of the MST server is not trusted` | The server uses its own certificate: copy it next to `config.json` and set `"tls_ca_bundle": "mst.crt"` (see `SECURITY.md`). |

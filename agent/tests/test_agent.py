@@ -451,3 +451,17 @@ def test_agent_carries_out_quarantine_actions_and_reports_them(tmp_path):
     assert second["outcome"] == "failed" and "Invalid" in second["error"]
     assert not target.exists() and (tmp_path / "quarantine" / first["quarantineName"]).exists()
     agent.outbox.close()
+
+
+from mst_agent.single_instance import AlreadyRunning, SingleInstance  # noqa: E402
+
+
+def test_only_one_agent_can_run_at_a_time(tmp_path):
+    first = SingleInstance(tmp_path / "mst_agent.lock")
+    first.acquire()
+    with pytest.raises(AlreadyRunning):
+        SingleInstance(tmp_path / "mst_agent.lock").acquire()
+    first.release()
+    second = SingleInstance(tmp_path / "mst_agent.lock")
+    second.acquire()  # free again once the first agent has stopped
+    second.release()

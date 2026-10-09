@@ -16,6 +16,7 @@ from pathlib import Path
 from mst_agent import VERSION
 from mst_agent.agent import Agent
 from mst_agent.config import ConfigError, load_config
+from mst_agent.single_instance import AlreadyRunning, SingleInstance
 from mst_agent.system_info import heartbeat_payload
 
 
@@ -46,6 +47,15 @@ def main() -> int:
         print(error, file=sys.stderr)
         return 2
     setup_logging(config.log_file)
+
+    if not args.check:
+        # One agent per computer: a second copy (e.g. started twice) would report every file twice.
+        lock = SingleInstance(config.queue_file.with_name("mst_agent.lock"))
+        try:
+            lock.acquire()
+        except AlreadyRunning as error:
+            print(error)
+            return 3
 
     agent = Agent(config, offline=args.offline)
     if args.check:
