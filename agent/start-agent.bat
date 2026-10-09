@@ -3,13 +3,16 @@ rem MST Monitoring Agent launcher (used by the automatic start; can also be doub
 rem The window stays visible on purpose: monitoring on lab PCs is never hidden.
 title MST Monitoring Agent
 cd /d "%~dp0"
-if not exist ".venv\Scripts\python.exe" (
-  echo The agent is not installed yet. See agent\README.md, "Install on each lab PC".
+rem Python environment: agent\.venv (lab PCs) or the project's .venv one folder up (the MST laptop).
+set PY=.venv\Scripts\python.exe
+if not exist "%PY%" set PY=..\.venv\Scripts\python.exe
+if not exist "%PY%" (
+  echo The agent is not installed yet. See agent\README.md, section 2.
   pause
   exit /b 1
 )
 :run
-".venv\Scripts\python.exe" run_agent.py
+"%PY%" run_agent.py
 set CODE=%ERRORLEVEL%
 rem 0 = stopped with Ctrl+C, 2 = config.json problem, 3 = the agent is already running: do not restart.
 if %CODE%==0 exit /b 0

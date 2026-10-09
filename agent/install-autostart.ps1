@@ -5,11 +5,13 @@ $ErrorActionPreference = 'Stop'
 $agent = $PSScriptRoot
 $taskName = 'MST Monitoring Agent'
 
-if (-not (Test-Path "$agent\.venv\Scripts\python.exe")) { Write-Host 'The agent is not installed yet (no .venv). Follow agent\README.md first.' -ForegroundColor Red; exit 1 }
+# Python environment: agent\.venv (lab PCs) or the project's .venv one folder up (the MST laptop).
+$python = @("$agent\.venv\Scripts\python.exe", "$agent\..\.venv\Scripts\python.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $python) { Write-Host 'The agent is not installed yet (no .venv). Follow agent\README.md section 2 first.' -ForegroundColor Red; exit 1 }
 if (-not (Test-Path "$agent\config.json")) { Write-Host 'config.json is missing. Copy config.example.json to config.json and fill it in first.' -ForegroundColor Red; exit 1 }
 
 Write-Host 'Checking the connection to the MST server...'
-& "$agent\.venv\Scripts\python.exe" "$agent\run_agent.py" --check
+& $python "$agent\run_agent.py" --check
 if ($LASTEXITCODE -ne 0) { Write-Host 'The MST server did not accept this PC. Fix the problem above, then run this script again.' -ForegroundColor Red; exit 1 }
 
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
