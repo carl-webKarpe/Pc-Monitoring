@@ -4,13 +4,35 @@
   "device_token": "PASTE-THE-TOKEN-FROM-register-agent.php",
   "heartbeat_interval_seconds": 30,
   "send_interval_seconds": 5,
-  "watch_folders": ["{Downloads}", "{Desktop}", "{Documents}"],
+  "watch_folders": [
+    "{Downloads}",
+    "{Desktop}",
+    "{Documents}"
+  ],
   "recursive": true,
-  "ignore_extensions": [".tmp", ".crdownload", ".part", ".partial", ".download", ".opdownload", ".swp", ".lnk", ".ini"],
-  "ignore_name_prefixes": ["~$", ".~", "~WRL"],
+  "ignore_extensions": [
+    ".tmp",
+    ".crdownload",
+    ".part",
+    ".partial",
+    ".download",
+    ".opdownload",
+    ".swp",
+    ".lnk",
+    ".ini"
+  ],
+  "ignore_name_prefixes": [
+    "~$",
+    ".~",
+    "~WRL"
+  ],
   "max_hash_size_mb": 200,
   "queue_file": "mst_agent_queue.db",
   "log_file": "mst_agent.log",
   "request_timeout_seconds": 10,
-  "tls_ca_bundle": ""
+  "tls_ca_bundle": "",
+  "antivirus": "auto",
+  "clamav_path": "",
+  "scan_timeout_seconds": 120,
+  "quarantine_folder": "quarantine"
 }

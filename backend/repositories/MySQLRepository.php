@@ -278,7 +278,7 @@ final class MySQLRepository
     /** Upload scans still waiting for VirusTotal's analysis, oldest check first. */
     public static function scansWaitingForVirusTotal(int $limit): array
     {
-        return array_map(fn($row) => self::map($row), self::db()->query("SELECT * FROM scans WHERE scan_state = 'Scanning' AND vt_analysis_id IS NOT NULL AND (vt_checked_at IS NULL OR vt_checked_at < NOW() - INTERVAL 20 SECOND) ORDER BY vt_checked_at IS NOT NULL, vt_checked_at LIMIT " . max(1, $limit))->fetchAll());
+        return array_map(fn($row) => self::map($row), self::db()->query("SELECT * FROM scans WHERE scan_state = 'Scanning' AND vt_analysis_id IS NOT NULL AND (vt_checked_at IS NULL OR vt_checked_at < NOW() - INTERVAL 15 SECOND) ORDER BY vt_checked_at IS NOT NULL, vt_checked_at LIMIT " . max(1, $limit))->fetchAll());
     }
     public static function markVirusTotalChecked(int $scanId, ?string $analysisId = null): void { self::db()->prepare('UPDATE scans SET vt_checked_at = NOW(), vt_analysis_id = COALESCE(?, vt_analysis_id) WHERE id = ?')->execute([$analysisId, $scanId]); }
 

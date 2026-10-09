@@ -1,4 +1,4 @@
-# MST Monitoring Agent (Phase 8)
+# MST Monitoring Agent (Phases 8 and 13)
 
 A small Python program that runs on each **authorized** lab computer. It:
 
@@ -63,6 +63,18 @@ To try the file watcher without a server: `python run_agent.py --offline` prints
 | `max_hash_size_mb` | Files larger than this are reported without a SHA-256 (default 200 MB) |
 | `tls_ca_bundle` | Certificate file to trust when `server_url` is `https://` with a lab/self-signed certificate (empty = normal certificate checks) |
 | `queue_file`, `log_file` | Local queue and log file (next to `config.json` by default) |
+| `antivirus` | `auto` (every installed engine), `defender`, `clamav` or `none`. Microsoft Defender is built into Windows and is found automatically |
+| `clamav_path`, `defender_path` | Only if MST cannot find `clamscan.exe` / `MpCmdRun.exe` by itself |
+| `scan_timeout_seconds` | Longest time one antivirus scan may take (default 120) |
+| `quarantine_folder` | Where quarantined files are kept (default `quarantine` next to `config.json`; must not be inside a watch folder) |
+
+## Scanning and quarantine (Phase 13)
+
+- Scans are run when an Admin clicks **Scan**, or automatically for every new file when *Settings → Scanner → Automatically scan new files* is on.
+- For each scan the agent hashes the file, identifies its real type, looks for risk indicators (disguised programs, macros, active PDF content, programs inside archives, suspicious script commands) and runs the installed antivirus engines. **Files are never opened or run, and never uploaded**: only the SHA-256 is checked on VirusTotal (by the server).
+- The agent log shows the engines it found at start-up, e.g. `Antivirus engine: Microsoft Defender 4.18... - Ready`. If it says *No antivirus engine is available*, results rely on VirusTotal and static analysis only.
+- **Quarantine** (Admin, with confirmation): the agent moves the file to `quarantine_folder` as `<id>-<hash>.quarantined` (read-only, cannot be double-clicked to run), but only if the file is still in a watch folder and its SHA-256 is unchanged. **Release** puts it back; **Delete** removes it permanently.
+- File activity reported: new files, real content changes (*modified*), renames, deletions, and how a file arrived: *Browser download completed* (temporary `.crdownload`/`.part` file renamed) or *Downloaded (confirmed)* when Windows' Mark of the Web shows it came from the internet (with the source site when the browser recorded it).
 
 ## Troubleshooting
 
@@ -72,6 +84,8 @@ To try the file watcher without a server: `python run_agent.py --offline` prints
 | `Device not authorized` | `device_id`/`device_token` do not match, or the PC was revoked (`register-agent.php --revoke`). Run `register-agent.php` again and paste the new token. |
 | `HTTPS certificate of the MST server is not trusted` | The server uses its own certificate: copy it next to `config.json` and set `"tls_ca_bundle": "mst.crt"` (see `SECURITY.md`). |
 | `Watch folder does not exist and is skipped` | Fix the path in `watch_folders`. |
+| A scan says *Microsoft Defender: The file disappeared during the scan* | Defender's real-time protection removed the file itself (normal for the EICAR test file). |
+| Quarantine failed: *has changed since it was scanned* | The file was edited after the scan. Scan it again, then quarantine. |
 | The PC still shows demo values ("10 sec ago", MAC *Unavailable*) | The agent has not connected: run `python run_agent.py --check` on the PC and read the message; make sure the same `device_id` was registered with `register-agent.php`. Then press Ctrl+F5 on the dashboard. |
 | A downloaded file does not appear | The agent must be running (`python run_agent.py`, window open) and the file must be in a folder listed in `watch_folders`. Check `mst_agent.log`. Temporary files (`.crdownload`, `~$...`) are ignored on purpose. |
 

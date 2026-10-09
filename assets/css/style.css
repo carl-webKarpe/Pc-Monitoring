@@ -1747,3 +1747,6 @@ body.login-body {
 .confirm-input { width: 100%; min-height: 40px; margin-top: 0.6rem; padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 9px; background: rgba(8,17,31,0.9); color: var(--text); font: inherit; font-size: 0.78rem; }
 textarea.confirm-input { min-height: 80px; resize: vertical; }
 @media (max-width: 760px) { .scan-pagination { justify-content: center; } .scanner-shell .phase5-detail-grid { grid-template-columns: 1fr; } }
+.link-button { padding: 0; border: 0; background: none; color: var(--cyan); font: inherit; font-size: 0.72rem; cursor: pointer; text-decoration: none; }
+.link-button:hover { text-decoration: underline; }
+.scan-list a { color: var(--text); }

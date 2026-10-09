@@ -11,8 +11,9 @@ final class Security
     public static function hash(string $password): string { return password_hash($password, PASSWORD_DEFAULT); }
     public static function verify(string $password, string $hash): bool { return password_verify($password, $hash); }
 
-    // Same cost (10, PHP 8.3 default and the seeded accounts) as a real check, so response time does not reveal whether a username exists.
-    public static function verifyAgainstDummy(string $password): void { password_verify($password, '$2y$10$6WE8BzZIxx0AceLK6RQCueysYdhtuU6h8cODKIXN00.0SESIAsySq'); }
+    // Unknown username: spend the same time as checking a real password (hashing with PHP's current default cost, which
+    // is also the cost of every password set through MST), so response time does not reveal whether a username exists.
+    public static function verifyAgainstDummy(string $password): void { password_hash($password, PASSWORD_DEFAULT); }
 
     /** "30 minutes" / "10 seconds" / "2 hours" -> seconds, clamped to [$min, $max]; $default when unreadable. */
     public static function durationSeconds(?string $value, int $default, int $min, int $max): int

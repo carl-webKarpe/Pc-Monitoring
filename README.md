@@ -220,3 +220,7 @@ When a file is scanned, the server also looks up its **SHA-256** on VirusTotal (
 
 Login lockout, idle session timeout, CSRF protection, strong passwords, security headers, web-folder protection, device-token revocation and security logging. See [SECURITY.md](SECURITY.md) for every measure, how to test it, and how to enable HTTPS. Existing databases: run `database/migrations/phase12_security.sql` once after `phase11_files.sql`.
 
+
+## Phase 13 - Real File Scanner
+
+Real scanning with antivirus engines (Microsoft Defender, built into Windows, and/or ClamAV) on the lab PCs and on the MST server, VirusTotal, the hash blocklist and static file analysis. Five honest risk levels (**Safe, Medium, High, Unknown, Failed**) with an evidence-strength rating instead of invented percentages; a full Scan History table (search, filters, sorting, paging, CSV and report export); real uploads on the File Scanner page; automatic scans of new files; quarantine / release / delete on lab PCs; investigations; a dashboard built only from database data. Setup, rules and testing: **[SCANNER.md](SCANNER.md)**. Existing databases: run `database/migrations/phase13_scanner.sql` once after `phase12_security.sql`.

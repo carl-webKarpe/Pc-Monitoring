@@ -46,18 +46,23 @@ If the API cannot be reached at all, pages fall back to their built-in demo data
 | GET | `/api/computers`, `/api/computers/{id}` | computer_monitoring |
 | GET | `/api/threats` (`?severity=&status=&computerId=`), `/api/threats/{id}` | threats |
 | PUT | `/api/threats/{id}/status` | threats |
-| GET | `/api/scans` (`?status=&type=&computerId=`), `/api/scans/{id}` | scan_history |
+| GET | `/api/scans` (`?q=&risk=&state=&source=&computerId=&from=&to=&sort=&dir=&limit=&offset=`, total in `meta`), `/api/scans/{id}` | scan_history |
+| GET | `/api/scans/export` (CSV, same filters), `/api/scans/{id}/report` (text report) | scan_history |
+| POST | `/api/scans/{id}/rescan`, `/api/scans/{id}/investigate`, `/api/scans/{id}/quarantine` (`{"confirm":true}`) | file_scanner (Admin only) |
+| DELETE | `/api/scans/{id}/stored-file` (uploaded copy; the record is kept) | file_scanner (Admin only) |
+| GET | `/api/quarantine`, `/api/quarantine/{id}` | computer_monitoring |
+| POST | `/api/quarantine/{id}/release` (`reason`, `confirm: "RELEASE"`), `/api/quarantine/{id}/delete` (`confirm: "DELETE"`) | file_scanner (Admin only) |
 | GET | `/api/reports` | reports |
 | GET | `/api/activity` | activity_logs |
 | GET, PUT | `/api/settings` (allowlisted keys only) | settings |
 | GET, POST / GET, PUT, DELETE | `/api/users`, `/api/users/{id}` (Tenant accounts) | user_management |
 | GET, POST / GET, PUT, DELETE | `/api/admins`, `/api/admins/{id}` (Admin and Super Admin accounts) | admin_management |
 | GET / PUT | `/api/permissions`, `/api/permissions/{role}` | permissions |
-| POST | `/api/file-scanner` (not implemented yet → 501) | file_scanner |
+| GET / POST | `/api/file-scanner` (engines and limits / multipart upload `file`, optional `submitToVirusTotal`, `force`) | file_scanner (Admin only) |
 | GET | `/api/file-events` (`?computerId=&type=&status=`), `/api/file-events/{id}` (with scan history) | computer_monitoring |
 | PUT | `/api/file-events/{id}` (`classification`: Normal/Confidential, `status`: Reviewed) | computer_monitoring |
-| POST | `/api/file-events/{id}/scan` (asks the agent on that PC to scan the file) | file_scanner (Admin only) |
-| POST | `/api/agent/heartbeat`, `/api/agent/events`, `/api/agent/scan-jobs`, `/api/agent/scan-results` | lab-PC agent (device token, no user session) |
+| POST | `/api/file-events/{id}/scan` (asks the agent on that PC to scan the file), `/api/file-events/{id}/quarantine` | file_scanner (Admin only) |
+| POST | `/api/agent/heartbeat`, `/api/agent/events`, `/api/agent/scan-jobs` (scans + quarantine actions), `/api/agent/scan-results`, `/api/agent/action-results` | lab-PC agent (device token, no user session) |
 
 List endpoints accept `?limit=` (1–500) and `?offset=`. Responses use `{ "success": true, "message": "...", "data": ... }` or `{ "success": false, "message": "...", "error": { "code": "..." } }` with 200/201/400/401/403/404/405/409/422/500 status codes. Database errors are logged server-side and never returned to the client.
 
@@ -102,3 +107,7 @@ Apply `database/migrations/phase12_security.sql` once (after `phase11_files.sql`
 - Request bodies over 1 MB → `413`. New and changed passwords follow the *Require Strong Password* setting.
 - Tools: `php backend/tools/set-password.php <username>`, `php backend/tools/register-agent.php --revoke <DEVICE-ID>`.
 
+
+## File scanner (Phase 13)
+
+`ScanService` collects the evidence (antivirus engines in `helpers/Antivirus.php`, VirusTotal, the hash blocklist and `helpers/FileAnalyzer.php`), `helpers/ScanClassifier.php` turns it into the risk level (Safe / Medium / High / Unknown / Failed) and evidence strength, and `MySQLRepository::completeScan()` stores it. Uploaded files are kept in `backend/storage/uploads` (random names, outside the website) for the retention period. See [`../SCANNER.md`](../SCANNER.md).

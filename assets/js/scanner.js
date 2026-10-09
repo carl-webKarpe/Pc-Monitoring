@@ -99,15 +99,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function actions(buttons, scan) {
+  function actions(buttons, record) {
     const target = document.getElementById('resultActions');
     target.innerHTML = buttons.map(([action, label, icon, style]) => `<button class="${style}" data-action="${action}"><i class="fa-solid ${icon}"></i> ${mstEscape(label)}</button>`).join('');
     target.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.action;
       if (action === 'again') { window.clearTimeout(state.pollTimer); show(dropZone); }
       if (action === 'force') scan(state.lastFile, true);
-      if (action === 'history') window.location.href = `scan-history.html?scan=${encodeURIComponent(scan.id)}`;
-      if (action === 'report') window.MSTApi.download(`/scans/${scan.id}/report`, `MST-${mstScanCode(scan.id)}-report.txt`).catch((error) => showMSTToast(mstApiErrorMessage(error, 'Unable to download the report.')));
+      if (action === 'history') window.location.href = `scan-history.html?scan=${encodeURIComponent(record.id)}`;
+      if (action === 'report') window.MSTApi.download(`/scans/${record.id}/report`, `MST-${mstScanCode(record.id)}-report.txt`).catch((error) => showMSTToast(mstApiErrorMessage(error, 'Unable to download the report.')));
     }));
   }
 
