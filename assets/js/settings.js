@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!page) return;
 
   let settingsAreLocal = false;
+  // Scanner settings belong to the File Scanner module (Admin only); the server refuses them from Super Admin too.
+  if (sessionStorage.getItem('mstRole') !== 'admin') page.querySelectorAll('[data-admin-only]').forEach((section) => section.remove());
 
   // Settings values come back from MySQL as strings; toggles are stored as "1" / "0".
   const applySettings = (saved) => {

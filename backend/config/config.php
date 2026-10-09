@@ -16,6 +16,18 @@ function mst_env(): array
     return $values;
 }
 
+function mst_env_value(string $key, string $default): string { $value = getenv($key); return trim((string)($value !== false && $value !== '' ? $value : (mst_env()[$key] ?? $default))); }
+
+// backend/storage holds uploaded files and small caches. It is outside the website (router.php/.htaccess block backend/).
+function mst_storage_path(string $name = ''): string
+{
+    $directory = dirname(__DIR__) . '/storage';
+    $path = $name === '' ? $directory : $directory . '/' . $name;
+    $folder = $name === '' || !str_contains($name, '/') ? $directory : dirname($path);
+    if (!is_dir($folder)) @mkdir($folder, 0700, true);
+    return $path;
+}
+
 function mst_config(): array
 {
     return [
@@ -32,6 +44,16 @@ function mst_config(): array
         'virustotal_api_key' => trim((string)(getenv('VIRUSTOTAL_API_KEY') ?: (mst_env()['VIRUSTOTAL_API_KEY'] ?? ''))),
         'virustotal_api_url' => rtrim((string)(getenv('VIRUSTOTAL_API_URL') ?: (mst_env()['VIRUSTOTAL_API_URL'] ?? 'https://www.virustotal.com/api/v3')), '/'),
         'virustotal_ca_bundle' => (string)(getenv('VIRUSTOTAL_CA_BUNDLE') ?: (mst_env()['VIRUSTOTAL_CA_BUNDLE'] ?? '')),
+        // Free VirusTotal keys allow 4 requests per minute; MST waits instead of going over the limit.
+        'virustotal_requests_per_minute' => max(1, (int)mst_env_value('VIRUSTOTAL_REQUESTS_PER_MINUTE', '4')),
+        // Phase 13 file scanner: antivirus engines on this server (auto | defender | clamav | none) for uploaded files.
+        'scan_engines' => mst_env_value('SCAN_ENGINES', 'auto'),
+        'scan_timeout_seconds' => (int)mst_env_value('SCAN_TIMEOUT_SECONDS', '120'),
+        'defender_path' => mst_env_value('DEFENDER_PATH', ''),
+        'clamav_path' => mst_env_value('CLAMAV_PATH', ''),
+        'clamav_database' => mst_env_value('CLAMAV_DATABASE', ''),
+        // VirusTotal accepts direct uploads up to 32 MB; PHP's upload_max_filesize/post_max_size must allow it too.
+        'max_upload_mb' => max(1, min(32, (int)mst_env_value('MAX_UPLOAD_MB', '32'))),
     ];
 }
 

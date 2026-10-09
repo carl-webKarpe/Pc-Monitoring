@@ -77,6 +77,88 @@ async function mstLoadNotifications() {
   }
 }
 
+// ---- Scan results (Phase 13): shared by File Scanner, Scan History, Detected Files and the dashboard ----
+const MST_RISK = {
+  High: ['high', 'HIGH RISK', 'fa-triangle-exclamation'], Medium: ['medium', 'MEDIUM RISK', 'fa-circle-exclamation'], Safe: ['safe', 'SAFE', 'fa-circle-check'],
+  Unknown: ['unknown', 'UNKNOWN', 'fa-circle-question'], Failed: ['failed', 'SCAN FAILED', 'fa-circle-xmark']
+};
+const MST_STRENGTH_HELP = {
+  Strong: 'Confirmed by an antivirus signature, the blocklist, 10+ VirusTotal vendors, or two clean engines',
+  Moderate: 'One engine result, 3-9 VirusTotal vendors, or a disguised program',
+  Limited: 'Only suspicious indicators or 1-2 VirusTotal vendors',
+  'N/A': 'Not enough evidence to rate'
+};
+function mstScanCode(id) { return `SCN-${String(id).padStart(3, '0')}`; }
+// Results recorded before Phase 13 used Critical/Low: shown as High/Unknown on the five-level scale.
+function mstRiskOf(scan) { return scan?.riskClass || ({ Critical: 'High', Low: 'Unknown' }[scan?.riskLevel] ?? scan?.riskLevel ?? null); }
+function mstRiskBadge(risk, state) {
+  if (state === 'Pending' || state === 'Scanning') return `<span class="risk-badge pending"><i class="fa-solid fa-spinner"></i> ${state === 'Pending' ? 'WAITING' : 'SCANNING'}</span>`;
+  if (!risk) return '<span class="risk-badge unknown">NOT SCANNED</span>';
+  const [tone, label, icon] = MST_RISK[risk] || ['unknown', String(risk).toUpperCase(), 'fa-circle-question'];
+  return `<span class="risk-badge ${tone}"><i class="fa-solid ${icon}"></i> ${mstEscape(label)}</span>`;
+}
+function mstStateBadge(state) {
+  const icon = { Pending: 'fa-clock', Scanning: 'fa-spinner', Completed: 'fa-check', Failed: 'fa-circle-xmark' }[state] || 'fa-circle';
+  return `<span class="state-badge ${mstEscape(String(state || '').toLowerCase())}"><i class="fa-solid ${icon}"></i> ${mstEscape(state || '—')}</span>`;
+}
+function mstStrength(scan) {
+  const strength = scan.evidenceStrength;
+  if (!strength) return '<span class="strength">—</span>';
+  return `<span class="strength" title="${mstEscape(MST_STRENGTH_HELP[strength] || '')}">${mstEscape(strength === 'N/A' ? 'N/A' : `${strength} evidence`)}${scan.analysisCoverage === 'Partial' ? '<small>Partial analysis</small>' : ''}</span>`;
+}
+function mstScanDetails(scan) { try { return scan?.scanDetails ? JSON.parse(scan.scanDetails) : {}; } catch { return {}; } }
+function mstVirusTotalText(vt) {
+  if (!vt) return 'Not checked';
+  if (vt.status === 'found') return `${mstEscape(vt.malicious)} of ${mstEscape(vt.total)} security vendors flagged it${vt.suspicious ? ` (${mstEscape(vt.suspicious)} suspicious)` : ''} · <a class="text-link" href="${mstEscape(vt.link)}" target="_blank" rel="noopener noreferrer">View report</a>`;
+  if (vt.status === 'not_found') return 'Unknown to VirusTotal (never submitted)';
+  if (vt.status === 'pending') return '<i class="fa-solid fa-spinner"></i> Uploaded, analysis in progress…';
+  if (vt.status === 'not_configured') return 'Not configured (no API key)';
+  return `Unavailable${vt.reason ? ` — ${mstEscape(vt.reason)}` : ''}`;
+}
+function mstFileSize(bytes) {
+  if (bytes === null || bytes === undefined || bytes === '') return '—';
+  const value = Number(bytes);
+  if (value < 1024) return `${value} B`;
+  if (value < 1048576) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1048576).toFixed(1)} MB`;
+}
+// Full scan report: metadata, result, antivirus engines, VirusTotal, evidence and recommended next steps.
+function mstScanReportHtml(scan) {
+  const esc = mstEscape;
+  const details = mstScanDetails(scan);
+  const risk = mstRiskOf(scan);
+  const location = scan.filePath || (scan.source === 'Upload' ? 'Uploaded on the File Scanner page' : '—');
+  const download = details.download && details.download.zone >= 3 ? `Downloaded from the internet (Windows Mark of the Web, zone ${esc(details.download.zone)})${details.download.hostUrl ? ` · source: ${esc(details.download.hostUrl)}` : ''}` : '';
+  const engines = (details.engines || []).map((engine) => `<tr><td>${esc(engine.name)} ${esc(engine.version || '')}${engine.signatureVersion ? `<small class="table-subtext">signatures ${esc(engine.signatureVersion)}</small>` : ''}</td><td>${engine.result === 'detected' ? `<span class="risk-badge high">DETECTED</span> ${esc(engine.signature || '')}` : engine.result === 'clean' ? '<span class="risk-badge safe">NO THREAT</span>' : `<span class="risk-badge unknown">${esc(String(engine.result).toUpperCase())}</span>`}<small class="table-subtext">${esc(engine.detail || '')}</small></td></tr>`).join('');
+  const factors = (details.factors || (details.error ? [details.error] : [])).map((factor) => `<li>${esc(factor)}</li>`).join('') || '<li>No evidence recorded for this scan.</li>';
+  const steps = (details.recommendations || []).map((step) => `<li>${esc(step)}</li>`).join('');
+  const pending = scan.scanState === 'Pending' || scan.scanState === 'Scanning';
+  return `<div class="phase5-detail-grid">
+      <div><span>Scan ID</span><strong>${esc(mstScanCode(scan.id))}</strong></div>
+      <div><span>Status</span><strong>${mstStateBadge(scan.scanState)}</strong></div>
+      <div><span>Risk Level</span><strong>${mstRiskBadge(risk, scan.scanState)}</strong></div>
+      <div><span>Evidence Strength</span><strong>${mstStrength(scan)}</strong></div>
+      <div class="file-wide"><span>Detection</span><strong>${esc(scan.detection || (pending ? 'Waiting for the scan to finish' : '—'))}</strong></div>
+      <div><span>File Name</span><strong>${esc(scan.fileName || '—')}</strong></div>
+      <div><span>File Type (from content)</span><strong>${esc(scan.fileType || details.fileType?.label || '—')}</strong></div>
+      <div class="file-wide"><span>Location</span><strong>${esc(location)}</strong></div>
+      <div><span>Computer</span><strong>${esc(scan.computerHostname ? `${scan.computerHostname} (${scan.computerDeviceId})` : 'MST server (upload)')}</strong></div>
+      <div><span>File Size</span><strong>${esc(mstFileSize(scan.fileSize))}</strong></div>
+      <div class="file-wide"><span>SHA-256</span><strong class="hash-cell">${esc(scan.fileHash || 'Not available')}</strong></div>
+      <div><span>Requested</span><strong>${esc(mstFormatDate(scan.createdAt))}<small class="table-subtext">${esc(scan.source === 'Auto' ? 'Automatic scan of a new file' : `by ${scan.createdByUsername || 'System'}`)}</small></strong></div>
+      <div><span>Completed</span><strong>${esc(scan.completedAt ? mstFormatDate(scan.completedAt) : '—')}<small class="table-subtext">${esc(scan.duration || '')}</small></strong></div>
+      <div class="file-wide"><span>Scanner</span><strong>${esc(scan.scanner || '—')}</strong></div>
+      ${download ? `<div class="file-wide"><span>Download Information</span><strong>${download}</strong></div>` : ''}
+    </div>
+    ${risk === 'Safe' && !pending ? '<p class="safe-note"><i class="fa-solid fa-circle-info"></i> Safe means the configured scanners found no threat. It does not guarantee that the file is completely safe.</p>' : ''}
+    ${scan.analysisCoverage === 'Partial' ? '<p class="scan-note"><i class="fa-solid fa-circle-half-stroke"></i> Partial analysis: at least one scanner could not check this file (see Evidence).</p>' : ''}
+    <h4 class="phase5-subheading">ANTIVIRUS ENGINES</h4>
+    ${engines ? `<table class="engine-table"><tbody>${engines}</tbody></table>` : '<p class="file-note">No antivirus engine result for this scan.</p>'}
+    <h4 class="phase5-subheading">VIRUSTOTAL</h4><p class="file-note">${mstVirusTotalText(details.virusTotal)}</p>
+    <h4 class="phase5-subheading">EVIDENCE</h4><ul class="evidence-list">${factors}</ul>
+    ${steps ? `<h4 class="phase5-subheading">RECOMMENDED NEXT STEPS</h4><ul class="evidence-list">${steps}</ul>` : ''}`;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
   const pathPrefix = window.location.pathname.includes('/management/') ? '../' : '';

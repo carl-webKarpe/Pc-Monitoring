@@ -84,35 +84,27 @@
                 <input type="file" id="fileInput" hidden />
                 Select File
               </label>
-              <div class="scan-meta">
-                Supported file types: .exe, .dll, .zip, .pdf, .docx<br />
-                Maximum size: Demo value
+              <div class="scan-meta" id="scannerLimits">Checking what this server can scan with…</div>
+              <div class="engine-chips" id="engineChips"></div>
+              <div class="scanner-options">
+                <label><input type="checkbox" id="submitToVirusTotal" /><span>Upload the file to VirusTotal if its hash is unknown<small>VirusTotal shares submitted files with security vendors. Do not submit confidential files (grades, personal data). Without this option only the file's SHA-256 is sent.</small></span></label>
               </div>
             </div>
 
             <div class="scan-progress hidden" id="scanProgress">
-              <h4>ANALYZING FILE</h4>
-              <div class="scan-bar"><span></span></div>
-              <div class="scan-steps">
-                <p>Calculating file hash...</p>
-                <p>Checking reputation...</p>
-                <p>Analyzing security status...</p>
-              </div>
-              <div class="scan-wait">Please wait...</div>
+              <h4 id="progressTitle">UPLOADING FILE</h4>
+              <div class="upload-bar" id="uploadBar"><span></span></div>
+              <div class="scan-steps"><p id="progressText">Sending the file to the MST server…</p></div>
+              <div class="scan-wait">The file is never opened or run. Please wait…</div>
             </div>
 
             <div class="scan-result hidden" id="scanResult">
               <div class="scan-result-header">
-                <div class="scan-result-icon"><i class="fa-solid fa-check"></i></div>
-                <div><h4>SCAN RESULT</h4><span>Security analysis completed</span></div>
+                <div class="scan-result-icon" id="resultIcon"><i class="fa-solid fa-check"></i></div>
+                <div><h4 id="resultTitle">SCAN RESULT</h4><span id="resultSubtitle">Security analysis completed</span></div>
               </div>
-              <div class="result-grid scan-result-grid">
-                <div class="scan-result-item"><span>FILE</span><strong id="resultFileName">example.exe</strong></div>
-                <div class="scan-result-item"><span>SHA-256</span><strong id="resultHash">xxxxxxxxxxxxxxxx</strong></div>
-                <div class="scan-result-item"><span>STATUS</span><strong class="safe-status">● SAFE</strong></div>
-                <div class="scan-result-item"><span>THREAT DETECTION</span><strong id="resultDetection">0 / 70</strong></div>
-                <div class="scan-result-item"><span>SCAN COMPLETED</span><strong id="resultTime">Just now</strong></div>
-              </div>
+              <div id="resultReport"></div>
+              <div class="result-actions" id="resultActions"></div>
             </div>
           </section>
         </div>

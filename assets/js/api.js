@@ -60,5 +60,39 @@ window.MSTApi = (() => {
       return { data: demoData, demo: true };
     }
   }
-  return { apiRequest, apiGetOrDemo, sessionEnded, apiGet: (path) => apiRequest(path), apiPost: (path, data) => apiRequest(path, { method: 'POST', body: JSON.stringify(data) }), apiPut: (path, data) => apiRequest(path, { method: 'PUT', body: JSON.stringify(data) }), apiDelete: (path) => apiRequest(path, { method: 'DELETE' }), authMe: () => apiRequest('/auth/me'), logout: () => apiRequest('/auth/logout', { method: 'POST' }).finally(() => saveToken('')) };
+  // File upload with real progress (fetch cannot report upload progress). Sends the CSRF token like every change.
+  async function upload(path, formData, onProgress) {
+    if (!readToken()) await send('/auth/me', {});
+    const attempt = () => new Promise((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open('POST', `${baseUrl}${path}`);
+      request.withCredentials = true;
+      request.setRequestHeader('X-CSRF-Token', readToken());
+      request.upload.onprogress = (event) => { if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total); };
+      request.onload = () => { let payload; try { payload = JSON.parse(request.responseText); } catch { payload = { success: false, message: 'Invalid API response' }; } resolve({ status: request.status, payload }); };
+      request.onerror = () => reject(new Error('Network error'));
+      request.send(formData);
+    });
+    let { status, payload } = await attempt();
+    if (status === 403 && payload?.error?.code === 'CSRF_INVALID') { await send('/auth/me', {}); ({ status, payload } = await attempt()); }
+    if (status === 401) sessionEnded(payload?.error?.code);
+    if (status >= 400 || payload.success === false) { const error = new Error(payload.message || 'Upload failed'); error.status = status; error.payload = payload; throw error; }
+    return payload;
+  }
+
+  // Downloads a server-generated file (CSV export, scan report) with the session cookie.
+  async function download(path, fileName) {
+    const response = await fetch(`${baseUrl}${path}`, { credentials: 'include' });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({ message: 'Download failed' }));
+      if (response.status === 401) sessionEnded(payload?.error?.code);
+      const error = new Error(payload.message || 'Download failed'); error.status = response.status; error.payload = payload; throw error;
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = Object.assign(document.createElement('a'), { href: url, download: fileName });
+    document.body.appendChild(link); link.click(); link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  return { apiRequest, apiGetOrDemo, sessionEnded, upload, download, apiGet: (path) => apiRequest(path), apiPost: (path, data) => apiRequest(path, { method: 'POST', body: JSON.stringify(data) }), apiPut: (path, data) => apiRequest(path, { method: 'PUT', body: JSON.stringify(data) }), apiDelete: (path) => apiRequest(path, { method: 'DELETE' }), authMe: () => apiRequest('/auth/me'), logout: () => apiRequest('/auth/logout', { method: 'POST' }).finally(() => saveToken('')) };
 })();

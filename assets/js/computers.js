@@ -91,7 +91,7 @@ async function loadComputerFileActivity(computer) {
     const { data } = await window.MSTApi.apiGet(`/file-events?computerId=${encodeURIComponent(computer.dbId)}&limit=8`);
     const size = (bytes) => (bytes === null || bytes === undefined ? '' : bytes >= 1048576 ? ` (${(bytes / 1048576).toFixed(1)} MB)` : ` (${Math.max(1, Math.round(bytes / 1024))} KB)`);
     const viewAll = `<p><a class="text-link" href="files.html?computer=${encodeURIComponent(computer.dbId)}">View all detected files <i class="fa-solid fa-arrow-right"></i></a></p>`;
-    target.innerHTML = heading + viewAll + (data.length ? data.map((event) => `<p><time>${mstEscape(mstTimeAgo(event.detectedAt))}</time> ${event.eventType === 'created' ? 'New file' : 'Deleted'}: <strong>${mstEscape(event.fileName)}</strong>${mstEscape(size(event.fileSize))}<br><small class="table-subtext">${mstEscape(event.filePath)}</small></p>`).join('') : `<p><time>—</time> ${computer.lastHeartbeatAt ? 'No file activity reported yet.' : 'The monitoring agent has not connected from this computer yet.'}</p>`);
+    target.innerHTML = heading + viewAll + (data.length ? data.map((event) => `<p><time>${mstEscape(mstTimeAgo(event.detectedAt))}</time> ${({ created: 'New file', modified: 'Modified', renamed: 'Renamed', deleted: 'Deleted' })[event.eventType] || event.eventType}${event.origin === 'internet' ? ' (downloaded)' : event.origin === 'browser_download' ? ' (browser download)' : ''}: <strong>${mstEscape(event.fileName)}</strong>${mstEscape(size(event.fileSize))}<br><small class="table-subtext">${mstEscape(event.filePath)}</small></p>`).join('') : `<p><time>—</time> ${computer.lastHeartbeatAt ? 'No file activity reported yet.' : 'The monitoring agent has not connected from this computer yet.'}</p>`);
   } catch (error) {
     target.innerHTML = `${heading}<p><time>—</time> ${mstEscape(mstApiErrorMessage(error, 'Unable to load file activity.'))}</p>`;
   }
@@ -118,6 +118,9 @@ async function loadComputers() {
   renderComputerStats(computerRows);
   filterComputers();
   if (computerDataIsDemo) showMSTToast('API unavailable — showing demo computer data', 'computerToast');
+  // computers.html?device=MST-PC-002 (from Scan History / Detected Files): open that computer's details once.
+  const linked = new URLSearchParams(window.location.search).get('device');
+  if (linked && !computerRows.linkedOpened) { computerRows.linkedOpened = true; if (computerRows.some((computer) => computer.id === linked)) showComputerDetails(linked); }
   const lastUpdated = document.getElementById('computerLastUpdated');
   if (lastUpdated) lastUpdated.textContent = 'Just now';
 }

@@ -33,6 +33,12 @@ class AgentConfig:
     log_file: Path = Path("mst_agent.log")
     request_timeout_seconds: int = 10
     tls_ca_bundle: Path | None = None  # certificate file for an HTTPS server with a self-signed/lab certificate
+    antivirus: str = "auto"            # auto (every installed engine) | defender | clamav | none
+    defender_path: str = ""            # MpCmdRun.exe; found automatically on Windows
+    clamav_path: str = ""              # clamscan(.exe) or clamdscan(.exe); found automatically when on PATH
+    clamav_database: str = ""          # optional signature folder for clamscan (--database)
+    scan_timeout_seconds: int = 120
+    quarantine_folder: Path = Path("quarantine")
 
     @property
     def max_hash_bytes(self) -> int:
@@ -56,6 +62,14 @@ def _watch_folder(value: str, base: Path) -> Path:
     if not folder.is_dir():
         return onedrive_fallback(folder) or folder
     return folder
+
+
+def _inside(path: Path, folder: Path) -> bool:
+    try:
+        path.resolve().relative_to(folder.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
 
 
 def load_config(path: str | Path, require_token: bool = True) -> AgentConfig:
@@ -108,7 +122,17 @@ def load_config(path: str | Path, require_token: bool = True) -> AgentConfig:
         log_file=_expand(str(raw.get("log_file", "mst_agent.log")), base),
         request_timeout_seconds=positive_int("request_timeout_seconds", 10),
         tls_ca_bundle=_expand(str(raw["tls_ca_bundle"]), base) if raw.get("tls_ca_bundle") else None,
+        antivirus=str(raw.get("antivirus", "auto")).lower(),
+        defender_path=str(raw.get("defender_path", "")),
+        clamav_path=str(raw.get("clamav_path", "")),
+        clamav_database=str(raw.get("clamav_database", "")),
+        scan_timeout_seconds=positive_int("scan_timeout_seconds", 120, 10),
+        quarantine_folder=_expand(str(raw.get("quarantine_folder") or "quarantine"), base),
     )
+    if config.antivirus not in ("auto", "defender", "clamav", "none"):
+        errors.append("antivirus must be auto, defender, clamav or none")
+    if any(_inside(config.quarantine_folder, folder) for folder in config.watch_folders):
+        errors.append("quarantine_folder must not be inside a watch folder")
     if config.tls_ca_bundle is not None and not config.tls_ca_bundle.is_file():
         errors.append(f"tls_ca_bundle file not found: {config.tls_ca_bundle}")
     if errors:

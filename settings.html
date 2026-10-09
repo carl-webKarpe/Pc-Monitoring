@@ -87,6 +87,13 @@
               <div class="toggle-row"><label>Two-Factor Authentication</label><button class="toggle-switch" type="button" data-setting="twoFactor" aria-label="Toggle two-factor authentication"><span></span></button></div>
             </div>
           </section>
+          <section class="card-surface" id="scannerSettings" data-admin-only>
+            <div class="section-header"><div><p class="eyebrow">Scanner</p><h3>File Scanner Settings</h3></div></div>
+            <div class="settings-form">
+              <div class="toggle-row"><label>Automatically scan new files on lab PCs</label><button class="toggle-switch on" type="button" data-setting="autoScan" aria-label="Toggle automatic scanning of new files"><span></span></button></div>
+              <div class="field"><label>Keep uploaded files for "Scan Again" (then delete them)</label><input name="uploadRetention" type="text" value="7 days" /></div>
+            </div>
+          </section>
           <section class="card-surface">
             <div class="section-header"><div><p class="eyebrow">Notifications</p><h3>Notification Settings</h3></div></div>
             <div class="settings-form">

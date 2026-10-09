@@ -57,8 +57,13 @@ class ApiClient:
     def send_events(self, events: list[dict]) -> dict:
         return self._post("/agent/events", {"events": events})
 
-    def scan_jobs(self) -> list[dict]:
-        return self._post("/agent/scan-jobs", {}).get("jobs", [])
+    def scan_jobs(self) -> tuple[list[dict], list[dict]]:
+        """Scans to run and quarantine actions to carry out on this PC."""
+        data = self._post("/agent/scan-jobs", {})
+        return data.get("jobs", []), data.get("actions", [])
 
     def send_scan_result(self, result: dict) -> dict:
         return self._post("/agent/scan-results", result)
+
+    def send_action_result(self, result: dict) -> dict:
+        return self._post("/agent/action-results", result)

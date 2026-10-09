@@ -59,6 +59,7 @@ final class Validation
         'sessionTimeout' => ['security', 'duration'], 'loginLimit' => ['security', 'attempts'], 'strongPassword' => ['security', 'bool'], 'twoFactor' => ['security', 'bool'],
         'threatAlerts' => ['notifications', 'bool'], 'offlineAlerts' => ['notifications', 'bool'], 'agentAlerts' => ['notifications', 'bool'], 'systemNotifications' => ['notifications', 'bool'],
         'compactMode' => ['interface', 'bool'], 'animations' => ['interface', 'bool'],
+        'autoScan' => ['scanner', 'bool'], 'uploadRetention' => ['scanner', 'days'],
     ];
 
     /** @return array<string, array{0: string, 1: string}> key => [category, normalized value] */
@@ -79,9 +80,10 @@ final class Validation
             $valid = match ($type) {
                 'duration' => (bool)preg_match('/^\d{1,4} (seconds?|minutes?|hours?)$/i', $text),
                 'attempts' => (bool)preg_match('/^\d{1,3} attempts?$/i', $text),
+                'days' => (bool)preg_match('/^([1-9]|[1-8]\d|90) days?$/i', $text),
                 default => $text !== '' && self::length($text) <= 100 && !preg_match('/[\x00-\x1F\x7F<>]/u', $text),
             };
-            if (!$valid) { $errors[$key] = match ($type) { 'duration' => 'Use a value such as "10 seconds" or "30 minutes"', 'attempts' => 'Use a value such as "5 attempts"', default => 'Must be 1-100 characters without < or >' }; continue; }
+            if (!$valid) { $errors[$key] = match ($type) { 'duration' => 'Use a value such as "10 seconds" or "30 minutes"', 'attempts' => 'Use a value such as "5 attempts"', 'days' => 'Use a value such as "7 days" (1-90 days)', default => 'Must be 1-100 characters without < or >' }; continue; }
             $clean[$key] = [$category, $text];
         }
         if ($errors !== []) self::fail($errors);

