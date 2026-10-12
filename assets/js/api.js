@@ -31,13 +31,14 @@ window.MSTApi = (() => {
     if (method !== 'GET' && readToken()) headers['X-CSRF-Token'] = readToken();
     const response = await fetch(`${baseUrl}${path}`, { ...options, method, credentials: 'include', headers });
     const payload = await response.json().catch(() => ({ success: false, message: 'Invalid API response' }));
-    if (path === '/auth/me' || path === '/auth/login') saveToken(payload?.data?.csrfToken || (response.ok ? readToken() : ''));
+    if (['/auth/me', '/auth/login', '/auth/approval'].includes(path)) saveToken(payload?.data?.csrfToken || (response.ok ? readToken() : ''));
     return { response, payload };
   }
 
   async function apiRequest(path, options = {}) {
     const method = (options.method || 'GET').toUpperCase();
-    const isAuthCall = path.startsWith('/auth/');
+    // Sign-in calls manage the session themselves; /auth/devices is a normal signed-in API.
+    const isAuthCall = path.startsWith('/auth/') && !path.startsWith('/auth/devices');
     if (method !== 'GET' && !isAuthCall && !readToken()) await send('/auth/me', {});
     let { response, payload } = await send(path, options);
     // A stale token (e.g. after signing in again in another tab): refresh it once and retry.

@@ -53,6 +53,10 @@ function mst_config(): array
         'clamav_path' => mst_env_value('CLAMAV_PATH', ''),
         'clamav_database' => mst_env_value('CLAMAV_DATABASE', ''),
         // VirusTotal accepts direct uploads up to 32 MB; PHP's upload_max_filesize/post_max_size must allow it too.
+        // Super Admin sign-in must be approved on a paired phone by scanning a QR code (on | off).
+        'superadmin_phone_login' => strtolower(mst_env_value('SUPERADMIN_PHONE_LOGIN', 'on')) !== 'off',
+        // Address phones use to reach this API, e.g. http://192.168.1.10:8081/api (empty = detected automatically).
+        'public_api_url' => rtrim(mst_env_value('PUBLIC_API_URL', ''), '/'),
         'max_upload_mb' => max(1, min(32, (int)mst_env_value('MAX_UPLOAD_MB', '32'))),
     ];
 }

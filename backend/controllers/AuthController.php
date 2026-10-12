@@ -7,6 +7,7 @@ require_once __DIR__ . '/../helpers/Validation.php';
 require_once __DIR__ . '/../helpers/Security.php';
 require_once __DIR__ . '/../middleware/AuthMiddleware.php';
 require_once __DIR__ . '/../repositories/MySQLRepository.php';
+require_once __DIR__ . '/PhoneAuthController.php';
 
 final class AuthController
 {
@@ -33,11 +34,15 @@ final class AuthController
         else { Security::verifyAgainstDummy((string)$data['password']); $passwordValid = false; }
 
         if ($passwordValid && $account['status'] === 'Active' && in_array($account['role'], AuthMiddleware::LOGIN_ROLES, true)) {
+            // Super Admin with a paired phone: the sign-in is finished only after it is approved on that phone.
+            $phoneRequired = PhoneAuthController::appliesTo($account);
+            if ($phoneRequired && MySQLRepository::activeDeviceCount((int)$account['id']) > 0) PhoneAuthController::startLoginApproval($account);
             $user = Security::publicUser($account);
             AuthMiddleware::startUserSession($user);
             MySQLRepository::touchLogin((int)$account['id']);
             MySQLRepository::log((int)$account['id'], 'LOGIN', 'Successful login', 'user', (string)$account['id']);
-            Response::success('Login successful', ['user' => $user, 'csrfToken' => Security::csrfToken()]);
+            // A Super Admin without a paired phone is asked to pair one (Settings → Phone Verification).
+            Response::success('Login successful', ['user' => $user, 'csrfToken' => Security::csrfToken(), 'phonePairingRequired' => $phoneRequired]);
         }
         // The typed identifier is not logged: users sometimes type a password into the username field.
         $reason = !$account ? 'unknown account' : (!$passwordValid ? 'invalid password' : ($account['status'] !== 'Active' ? 'inactive account' : 'role not permitted'));

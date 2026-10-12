@@ -87,6 +87,20 @@
               <div class="toggle-row"><label>Two-Factor Authentication</label><button class="toggle-switch" type="button" data-setting="twoFactor" aria-label="Toggle two-factor authentication"><span></span></button></div>
             </div>
           </section>
+          <section class="card-surface" id="phoneSettings" data-superadmin-only>
+            <div class="section-header"><div><p class="eyebrow">Super Admin</p><h3>Phone Verification</h3></div></div>
+            <div class="settings-form">
+              <p class="file-note" id="phoneSummary">Loading…</p>
+              <ul class="device-list" id="deviceList"></ul>
+              <div class="pair-panel hidden" id="pairPanel">
+                <p class="file-note">Scan this QR code with your phone's camera and tap <b>Pair this phone</b>. The phone must be on the same Wi-Fi as this laptop.</p>
+                <div class="phone-qr" id="pairQr" role="img" aria-label="QR code to pair a phone"></div>
+                <p class="file-note" id="pairStatus"></p>
+                <p class="phone-url">Or open on the phone: <span id="pairUrl"></span></p>
+              </div>
+              <div class="settings-actions"><button class="btn-primary" type="button" id="pairPhone"><i class="fa-solid fa-qrcode"></i> Pair a phone</button></div>
+            </div>
+          </section>
           <section class="card-surface" id="scannerSettings" data-admin-only>
             <div class="section-header"><div><p class="eyebrow">Scanner</p><h3>File Scanner Settings</h3></div></div>
             <div class="settings-form">
@@ -119,5 +133,7 @@
     <script src="assets/js/api.js"></script>
     <script src="assets/js/app.js"></script>
     <script src="assets/js/settings.js"></script>
+    <script src="assets/js/vendor/qrcode.js"></script>
+    <script src="assets/js/phone-settings.js"></script>
   </body>
 </html>

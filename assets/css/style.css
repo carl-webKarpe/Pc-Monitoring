@@ -1750,3 +1750,25 @@ textarea.confirm-input { min-height: 80px; resize: vertical; }
 .link-button { padding: 0; border: 0; background: none; color: var(--cyan); font: inherit; font-size: 0.72rem; cursor: pointer; text-decoration: none; }
 .link-button:hover { text-decoration: underline; }
 .scan-list a { color: var(--text); }
+
+/* Phase 14: Super Admin phone verification (login page + Settings) */
+.phone-approval { display: grid; gap: 0.8rem; text-align: center; }
+.phone-approval.hidden, #loginForm.hidden { display: none; }
+.phone-eyebrow { color: var(--cyan); font-size: 0.62rem; letter-spacing: 0.3em; text-transform: uppercase; }
+.phone-approval h2 { margin: 0; color: var(--text); font-size: 1.5rem; font-weight: 700; }
+.phone-help, .phone-url { margin: 0; color: var(--muted); font-size: 0.82rem; line-height: 1.55; }
+.phone-url span { color: #cbd5e1; font-family: ui-monospace, Consolas, monospace; font-size: 0.72rem; overflow-wrap: anywhere; }
+.phone-qr { width: min(260px, 100%); margin: 0.3rem auto; padding: 0; border-radius: 14px; background: #fff; box-shadow: 0 0 30px rgba(0,217,255,0.18); transition: opacity 0.2s ease; }
+.phone-qr svg { display: block; width: 100%; height: auto; }
+.phone-qr.used { opacity: 0.25; }
+.phone-match { color: #cbd5e1; font-size: 0.85rem; }
+.phone-match b { display: inline-block; margin-left: 0.3rem; padding: 0.15rem 0.6rem; border-radius: 8px; background: rgba(0,217,255,0.12); color: var(--cyan); font-size: 1.4rem; letter-spacing: 0.08em; }
+.phone-status { margin: 0; color: #bbf7d0; font-size: 0.85rem; }
+.phone-status.failed { color: #fecaca; }
+.phone-cancel { justify-self: center; padding: 0.55rem 1rem; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: #cbd5e1; cursor: pointer; }
+.phone-cancel:hover { border-color: rgba(0,217,255,0.45); color: var(--cyan); }
+.device-list { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.device-list li { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; padding: 0.7rem 0.8rem; border: 1px solid rgba(148,163,184,0.14); border-radius: 10px; color: #cbd5e1; font-size: 0.78rem; }
+.device-list small { display: block; color: var(--muted); font-size: 0.66rem; }
+.pair-panel { display: grid; justify-items: center; gap: 0.6rem; padding: 0.8rem 0; text-align: center; }
+.pair-panel.hidden { display: none; }

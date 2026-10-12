@@ -18,6 +18,7 @@ Monitoring System Threat runs inside an authorized computer laboratory. This pag
 | | Same response and same password-hashing time for unknown usernames, so attackers cannot discover account names | `Security::verifyAgainstDummy` |
 | | **Strong passwords** (setting *Require Strong Password*): 8+ characters with upper- and lowercase letters, a number and a symbol, not containing the username | `Security::passwordProblem` |
 | | Change any password from the server console: `php backend/tools/set-password.php <username>` | `backend/tools/set-password.php` |
+| Phone approval (Super Admin) | After the correct password, Super Admin sign-in is finished only when a **paired phone** scans the QR code shown on the laptop, sees the same 2-digit number and taps **Approve**. QR codes are random 256-bit one-time tokens (only their SHA-256 is stored) that expire after 2 minutes; a phone is paired once from Settings and keeps its key in an HttpOnly cookie (only the key's SHA-256 is stored). *Deny* blocks the sign-in and counts as a failed login. Lost phone: `php backend/tools/reset-phone.php superadmin` | `PhoneAuthController`, `login-phone.js`, `phone-settings.js` |
 | Sessions | Cookie is `HttpOnly`, `SameSite=Strict`, `Secure` over HTTPS; session ID regenerated at sign-in; strict session mode | `config.php`, `AuthMiddleware` |
 | | **Idle timeout** from the *Session Timeout* setting (5 min – 24 h, default 30 min) and a 12-hour maximum; the user is sent to the login page with "Your session expired" | `AuthMiddleware`, `assets/js/api.js` |
 | API authorization | Every endpoint checks a module of the fixed MST role policy, then the `permissions` table (which can only narrow it). Admin cannot use User/Admin Management or Permissions; Super Admin cannot use the File Scanner | `RoleMiddleware` |
@@ -62,6 +63,7 @@ PHP's built-in server only speaks HTTP. For HTTPS on the lab network, put Apache
 
 | Control | How to show it |
 |---|---|
+| Phone approval | Sign in as superadmin: a QR code appears; scan it with the paired phone, compare the number, tap Approve → dashboard. Scan it with another phone → "Phone not paired". Tap Deny → the laptop shows "denied" and Activity Logs record it |
 | Lockout | Set *Login Attempt Limit* to 3, enter a wrong password 3 times, then the right one → "Too many failed login attempts" |
 | Idle timeout | Set *Session Timeout* to 5 minutes, leave a non-refreshing page (e.g. Settings) for 5 minutes, click anything → login page with "Your session expired" |
 | Role enforcement | As Admin open `http://localhost:8081/api/users` → 403, and an `ACCESS_DENIED` entry in Activity Logs |
@@ -71,6 +73,7 @@ PHP's built-in server only speaks HTTP. For HTTPS on the lab network, put Apache
 
 ## Known limitations / future work
 
-- Two-factor authentication is not implemented (the setting is shown but has no effect).
+- Admin accounts sign in with the password only (phone approval is for Super Admin). The *Two-Factor Authentication* switch in Settings has no effect.
+- A paired phone's key belongs to the laptop address it was paired with: if the laptop's IP address changes, pair the phone again (or give the laptop a fixed IP in the router).
 - The website loads Tailwind CSS and Font Awesome from CDNs; a strict `script-src` Content-Security-Policy needs those bundled locally (Phase 13).
 - HTTPS requires the Apache setup above; the built-in PHP server is for the lab/demo environment.

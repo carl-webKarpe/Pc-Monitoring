@@ -438,13 +438,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       window.MSTApi.apiPost('/auth/login', { username, password })
         .then(({ data }) => {
+          // Super Admin with a paired phone: show the QR code and wait for approval on the phone.
+          if (data.approvalRequired) { window.MSTPhoneLogin?.start(data); return; }
           const signedInRole = toFrontendRole(data.user.role);
           if (!signedInRole) {
             alert('Invalid username or password');
             return;
           }
           sessionStorage.setItem('mstRole', signedInRole);
-          window.location.href = 'dashboard.html';
+          window.location.href = data.phonePairingRequired ? 'settings.html?pair=1' : 'dashboard.html';
         })
         .catch((error) => {
           alert(error.status ? error.message : 'Authentication service is unavailable.');

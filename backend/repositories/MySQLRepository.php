@@ -427,5 +427,33 @@ final class MySQLRepository
         return self::findQuarantine((int)$item['id']) ?? [];
     }
 
-    public static function tableAccessible(string $table): bool { if (!in_array($table, ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events', 'hash_blocklist', 'hash_reputation', 'quarantine_items'], true)) return false; self::db()->query("SELECT 1 FROM `$table` LIMIT 1")->fetchAll(); return true; }
+    // ---- Phone approval for Super Admin sign-in (Phase 14) -------------------------------------------------
+
+    public static function activeDeviceCount(int $userId): int { $statement = self::db()->prepare('SELECT COUNT(*) FROM trusted_devices WHERE user_id = ? AND revoked_at IS NULL'); $statement->execute([$userId]); return (int)$statement->fetchColumn(); }
+    public static function listDevices(int $userId): array { return self::fetchAll('SELECT id, name, created_at, last_used_at FROM trusted_devices WHERE user_id = ? AND revoked_at IS NULL ORDER BY id', [$userId]); }
+    public static function findDeviceByKey(string $keyHash): ?array { return self::fetchOne('SELECT * FROM trusted_devices WHERE key_hash = ? AND revoked_at IS NULL', [$keyHash]); }
+    public static function createDevice(int $userId, string $name, string $keyHash): int { self::db()->prepare('INSERT INTO trusted_devices (user_id, name, key_hash) VALUES (?, ?, ?)')->execute([$userId, $name, $keyHash]); return (int)self::db()->lastInsertId(); }
+    public static function touchDevice(int $id): void { self::db()->prepare('UPDATE trusted_devices SET last_used_at = NOW() WHERE id = ?')->execute([$id]); }
+    public static function revokeDevice(int $id, int $userId): bool { $statement = self::db()->prepare('UPDATE trusted_devices SET revoked_at = NOW() WHERE id = ? AND user_id = ? AND revoked_at IS NULL'); $statement->execute([$id, $userId]); return $statement->rowCount() > 0; }
+    public static function revokeAllDevices(int $userId): int { $statement = self::db()->prepare('UPDATE trusted_devices SET revoked_at = NOW() WHERE user_id = ? AND revoked_at IS NULL'); $statement->execute([$userId]); return $statement->rowCount(); }
+
+    public static function createPhoneRequest(string $purpose, string $tokenHash, int $userId, ?int $matchNumber, ?string $ip, ?string $agent, int $ttlSeconds): int
+    {
+        self::db()->prepare('INSERT INTO phone_requests (purpose, token_hash, user_id, match_number, requester_ip, requester_agent, expires_at) VALUES (?, ?, ?, ?, ?, ?, NOW() + INTERVAL ? SECOND)')
+            ->execute([$purpose, $tokenHash, $userId, $matchNumber, $ip, $agent, $ttlSeconds]);
+        return (int)self::db()->lastInsertId();
+    }
+    private const PHONE_REQUEST_SELECT = 'SELECT r.*, GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), r.expires_at)) AS seconds_left, u.username, u.role AS user_role, d.name AS device_name FROM phone_requests r JOIN users u ON u.id = r.user_id LEFT JOIN trusted_devices d ON d.id = r.device_id';
+    public static function expirePhoneRequests(): void { self::db()->exec("UPDATE phone_requests SET status = 'expired' WHERE status IN ('pending', 'approved') AND expires_at < NOW()"); }
+    public static function findPhoneRequest(int $id): ?array { self::expirePhoneRequests(); return self::fetchOne(self::PHONE_REQUEST_SELECT . ' WHERE r.id = ?', [$id]); }
+    public static function findPhoneRequestByToken(string $tokenHash): ?array { self::expirePhoneRequests(); return self::fetchOne(self::PHONE_REQUEST_SELECT . ' WHERE r.token_hash = ?', [$tokenHash]); }
+    /** Moves a request on only from the expected state, so a QR code can be used once. */
+    public static function updatePhoneRequest(int $id, string $from, string $to, ?int $deviceId = null): bool
+    {
+        $statement = self::db()->prepare('UPDATE phone_requests SET status = ?, device_id = COALESCE(?, device_id), decided_at = COALESCE(decided_at, NOW()) WHERE id = ? AND status = ? AND expires_at >= NOW()');
+        $statement->execute([$to, $deviceId, $id, $from]);
+        return $statement->rowCount() === 1;
+    }
+
+    public static function tableAccessible(string $table): bool { if (!in_array($table, ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events', 'hash_blocklist', 'hash_reputation', 'quarantine_items', 'trusted_devices', 'phone_requests'], true)) return false; self::db()->query("SELECT 1 FROM `$table` LIMIT 1")->fetchAll(); return true; }
 }

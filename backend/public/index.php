@@ -19,6 +19,7 @@ require_once __DIR__ . '/../controllers/HealthController.php';
 require_once __DIR__ . '/../controllers/AgentController.php';
 require_once __DIR__ . '/../controllers/FileEventController.php';
 require_once __DIR__ . '/../controllers/QuarantineController.php';
+require_once __DIR__ . '/../controllers/PhoneAuthController.php';
 
 ini_set('display_errors', '0');
 mst_apply_cors();
@@ -48,6 +49,11 @@ if ($resource === 'auth') {
     if ($id === 'login' && $method === 'POST') AuthController::login(Validation::body());
     if ($id === 'logout' && $method === 'POST') AuthController::logout();
     if ($id === 'me' && $method === 'GET') AuthController::me();
+    // Phone approval of Super Admin sign-in (Phase 14)
+    if ($id === 'phone' && $action === null && $method === 'GET') PhoneAuthController::page();
+    if ($id === 'phone' && $action === null && $method === 'POST') PhoneAuthController::decide();
+    if ($id === 'approval' && $action === null && $method === 'POST') PhoneAuthController::approvalStatus();
+    if ($id === 'devices') PhoneAuthController::devices($method, $action);
     Response::error('Method not allowed', 'METHOD_NOT_ALLOWED', 405);
 }
 if ($resource === 'health' && $id === 'database' && $action === null) HealthController::database($method);

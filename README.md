@@ -224,3 +224,7 @@ Login lockout, idle session timeout, CSRF protection, strong passwords, security
 ## Phase 13 - Real File Scanner
 
 Real scanning with antivirus engines (Microsoft Defender, built into Windows, and/or ClamAV) on the lab PCs and on the MST server, VirusTotal, the hash blocklist and static file analysis. Five honest risk levels (**Safe, Medium, High, Unknown, Failed**) with an evidence-strength rating instead of invented percentages; a full Scan History table (search, filters, sorting, paging, CSV and report export); real uploads on the File Scanner page; automatic scans of new files; quarantine / release / delete on lab PCs; investigations; a dashboard built only from database data. Setup, rules and testing: **[SCANNER.md](SCANNER.md)**. Existing databases: run `database/migrations/phase13_scanner.sql` once after `phase12_security.sql`.
+
+## Phase 14 - Super Admin Phone Approval (QR code)
+
+After the correct password, the Super Admin sign-in must be approved on a **paired phone**: the laptop shows a QR code, the phone scans it, checks that the 2-digit number matches and taps **Approve**, and the laptop goes to the dashboard. Admin accounts are not affected. Pair the phone once in **Settings → Phone Verification** (the phone must be on the same Wi-Fi as the laptop). Lost phone: `php backend/tools/reset-phone.php superadmin`. Existing databases: run `database/migrations/phase14_phone_login.sql` once. Details: [SECURITY.md](SECURITY.md).

@@ -131,6 +131,17 @@
               </button>
             </form>
 
+            <div id="phoneApproval" class="phone-approval hidden" aria-live="polite">
+              <div class="phone-eyebrow">Super Admin Verification</div>
+              <h2>Approve on your phone</h2>
+              <p class="phone-help">Scan this QR code with the camera of your <b>paired phone</b>, check the number, then tap <b>Approve</b>.</p>
+              <div id="phoneQr" class="phone-qr" role="img" aria-label="QR code to approve this sign-in"></div>
+              <div class="phone-match">Number shown on your phone: <b id="phoneMatch">--</b></div>
+              <p id="phoneStatus" class="phone-status">Waiting for approval…</p>
+              <p class="phone-url">Can't scan? Open this on the phone:<br><span id="phoneUrl"></span></p>
+              <button id="phoneCancel" type="button" class="phone-cancel">Back to sign in</button>
+            </div>
+
           </div>
         </section>
       </div>
@@ -138,5 +149,7 @@
 
     <script src="assets/js/app.js"></script>
     <script src="assets/js/api.js"></script>
+    <script src="assets/js/vendor/qrcode.js"></script>
+    <script src="assets/js/login-phone.js"></script>
   </body>
 </html>
