@@ -62,6 +62,7 @@ If the API cannot be reached at all, pages fall back to their built-in demo data
 | GET | `/api/file-events` (`?computerId=&type=&status=`), `/api/file-events/{id}` (with scan history) | computer_monitoring |
 | PUT | `/api/file-events/{id}` (`classification`: Normal/Confidential, `status`: Reviewed) | computer_monitoring |
 | POST | `/api/file-events/{id}/scan` (asks the agent on that PC to scan the file), `/api/file-events/{id}/quarantine` | file_scanner (Admin only) |
+| POST | `/api/file-events/{id}/delete` (`{"confirm":"DELETE"}`): the agent deletes the file on that PC after checking its SHA-256 | file_scanner (Admin only) |
 | POST | `/api/agent/heartbeat`, `/api/agent/events`, `/api/agent/scan-jobs` (scans + quarantine actions), `/api/agent/scan-results`, `/api/agent/action-results` | lab-PC agent (device token, no user session) |
 
 List endpoints accept `?limit=` (1–500) and `?offset=`. Responses use `{ "success": true, "message": "...", "data": ... }` or `{ "success": false, "message": "...", "error": { "code": "..." } }` with 200/201/400/401/403/404/405/409/422/500 status codes. Database errors are logged server-side and never returned to the client.

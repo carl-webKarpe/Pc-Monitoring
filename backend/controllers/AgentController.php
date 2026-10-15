@@ -126,7 +126,10 @@ final class AgentController
         $error = $succeeded ? null : (ScanService::cleanText($data['error'] ?? '', 200) ?: 'The agent could not complete the action');
         $updated = MySQLRepository::finishQuarantineAction($item, $action, $succeeded, $name, $error);
         $verb = ['quarantine' => 'Quarantined', 'release' => 'Released', 'delete' => 'Deleted'][$action];
-        MySQLRepository::log(null, $succeeded ? ['quarantine' => 'FILE_QUARANTINED', 'release' => 'FILE_RELEASED', 'delete' => 'QUARANTINE_DELETED'][$action] : 'QUARANTINE_FAILED', $succeeded ? "$verb {$item['fileName']} on {$computer['hostname']}" : ucfirst($action) . " of {$item['fileName']} on {$computer['hostname']} failed: $error", 'quarantine', (string)$itemId);
+        $deleting = $action === 'quarantine' && $item['status'] === 'Delete Requested';  // first step of "Delete from computer"
+        $message = $succeeded ? "$verb {$item['fileName']} on {$computer['hostname']}" . ($deleting ? ' (deletion requested: deleting it next)' : '')
+            : ($deleting ? 'Deletion' : ucfirst($action)) . " of {$item['fileName']} on {$computer['hostname']} failed: $error";
+        MySQLRepository::log(null, $succeeded ? ['quarantine' => 'FILE_QUARANTINED', 'release' => 'FILE_RELEASED', 'delete' => 'QUARANTINE_DELETED'][$action] : 'QUARANTINE_FAILED', $message, 'quarantine', (string)$itemId);
         Response::success('Action result recorded', ['itemId' => $itemId, 'status' => $updated['status'] ?? null]);
     }
 

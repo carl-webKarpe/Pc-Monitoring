@@ -381,10 +381,11 @@ final class MySQLRepository
     public static function listQuarantine(int $limit, int $offset): array { return self::fetchAll(self::QUARANTINE_SELECT . ' ORDER BY q.id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset)); }
     public static function activeQuarantineForFile(int $fileEventId): ?array { return self::fetchOne(self::QUARANTINE_SELECT . " WHERE q.file_event_id = ? AND q.status IN ('" . implode("', '", self::QUARANTINE_ACTIVE) . "') ORDER BY q.id DESC LIMIT 1", [$fileEventId]); }
 
-    public static function createQuarantine(array $fileEvent, ?int $scanId, string $sha256, int $userId): int
+    /** $deleteAfter: "Delete from computer" - the agent quarantines the file first, then deletes it (see finishQuarantineAction). */
+    public static function createQuarantine(array $fileEvent, ?int $scanId, string $sha256, int $userId, bool $deleteAfter = false): int
     {
-        self::db()->prepare("INSERT INTO quarantine_items (computer_id, file_event_id, scan_id, file_name, original_path, sha256, status, pending_action, requested_by) VALUES (?, ?, ?, ?, ?, ?, 'Quarantine Requested', 'quarantine', ?)")
-            ->execute([$fileEvent['computerId'], $fileEvent['id'], $scanId, $fileEvent['fileName'], $fileEvent['filePath'], strtolower($sha256), $userId]);
+        self::db()->prepare("INSERT INTO quarantine_items (computer_id, file_event_id, scan_id, file_name, original_path, sha256, status, pending_action, requested_by) VALUES (?, ?, ?, ?, ?, ?, ?, 'quarantine', ?)")
+            ->execute([$fileEvent['computerId'], $fileEvent['id'], $scanId, $fileEvent['fileName'], $fileEvent['filePath'], strtolower($sha256), $deleteAfter ? 'Delete Requested' : 'Quarantine Requested', $userId]);
         return (int)self::db()->lastInsertId();
     }
 
@@ -414,6 +415,9 @@ final class MySQLRepository
             if (!$succeeded) {
                 $status = $action === 'quarantine' ? 'Failed' : 'Quarantined';
                 $db->prepare('UPDATE quarantine_items SET status = ?, pending_action = NULL, last_error = ? WHERE id = ?')->execute([$status, $error, $item['id']]);
+            } elseif ($action === 'quarantine' && $item['status'] === 'Delete Requested') {
+                // First step of "Delete from computer": the file is now in quarantine; next the agent deletes that copy.
+                $db->prepare("UPDATE quarantine_items SET pending_action = 'delete', action_sent_at = NULL, last_error = NULL, quarantined_at = NOW(), quarantine_name = COALESCE(?, quarantine_name) WHERE id = ?")->execute([$quarantineName, $item['id']]);
             } else {
                 [$status, $column] = ['quarantine' => ['Quarantined', 'quarantined_at'], 'release' => ['Released', 'released_at'], 'delete' => ['Deleted', 'deleted_at']][$action];
                 $db->prepare("UPDATE quarantine_items SET status = ?, pending_action = NULL, last_error = NULL, $column = NOW(), quarantine_name = COALESCE(?, quarantine_name) WHERE id = ?")->execute([$status, $quarantineName, $item['id']]);

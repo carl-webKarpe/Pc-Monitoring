@@ -56,6 +56,12 @@ window.MSTScanActions = (() => {
     fields: [{ id: 'deleteConfirm', label: 'Type DELETE to confirm', placeholder: 'DELETE' }],
     button: 'Delete permanently', run: async (values) => (await window.MSTApi.apiPost(`/quarantine/${item.id}/delete`, { confirm: values.deleteConfirm })).message,
   });
+  const deleteFromComputer = (file) => confirm({
+    title: 'Delete file from computer',
+    message: `Permanently delete ${file.fileName} from ${file.computerHostname} (${file.filePath})? The agent first checks that the file is unchanged (same SHA-256), then deletes it. It does not go to the Recycle Bin and cannot be undone. The scan records are kept.`,
+    fields: [{ id: 'deleteFileConfirm', label: 'Type DELETE to confirm', placeholder: 'DELETE' }],
+    button: 'Delete from computer', run: async (values) => (await window.MSTApi.apiPost(`/file-events/${file.id}/delete`, { confirm: values.deleteFileConfirm })).message,
+  });
   const deleteStoredCopy = (scan) => confirm({
     title: 'Delete uploaded copy',
     message: `Delete the stored copy of ${scan.fileName} from the MST server now (it would otherwise be deleted when the retention period ends)? The scan record stays in Scan History.`,
@@ -69,5 +75,5 @@ window.MSTScanActions = (() => {
       return payload.data;
     } catch (error) { showMSTToast(errorText(error, 'Unable to start a new scan.')); return null; }
   }
-  return { isAdmin, confirm, close, quarantine, release, deleteQuarantined, deleteStoredCopy, rescan, errorText };
+  return { isAdmin, confirm, close, quarantine, release, deleteQuarantined, deleteFromComputer, deleteStoredCopy, rescan, errorText };
 })();

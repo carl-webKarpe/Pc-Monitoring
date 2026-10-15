@@ -160,6 +160,7 @@ async function showFileDetails(id, { refresh = false } = {}) {
   const buttons = [];
   if (!admin) buttons.push('<p class="file-note">Scanning and quarantine are done by Admin accounts (File Scanner). Super Admin can review and classify files.</p>');
   else if (file.eventType === 'deleted') buttons.push('<p class="file-note">This file was deleted, so it can no longer be scanned.</p>');
+  else if (file.quarantineStatus === 'Delete Requested') buttons.push(`<p class="file-note">Deletion requested. The agent on ${fileEsc(file.computerHostname)} will delete the file${file.computerStatus === 'offline' ? ' when it reconnects' : ' shortly'}.</p>`);
   else if (fileActiveQuarantine(file)) buttons.push(`<p class="file-note">The file is ${fileEsc(file.quarantineStatus.toLowerCase())}.</p>`);
   else {
     buttons.push(`<button class="btn-primary file-action" data-action="scan" ${running ? 'disabled' : ''}><i class="fa-solid fa-magnifying-glass"></i> ${running ? 'Scan in progress…' : `Scan on ${fileEsc(file.computerHostname)}`}</button>`);
@@ -194,6 +195,7 @@ async function showFileDetails(id, { refresh = false } = {}) {
       <button class="btn-secondary file-action" data-action="Confidential"><i class="fa-solid fa-user-lock"></i> Mark Confidential</button>
       <button class="btn-secondary file-action" data-action="Normal"><i class="fa-solid fa-file"></i> Mark Normal</button>
       ${file.status === 'New' ? '<button class="btn-secondary file-action" data-action="Reviewed"><i class="fa-solid fa-eye"></i> Mark Reviewed</button>' : ''}
+      ${admin && fileExists(file) && !running && file.sha256 ? `<button class="btn-danger file-action" data-action="deleteOnComputer"><i class="fa-solid fa-trash-can"></i> Delete from ${fileEsc(file.computerHostname)}</button>` : ''}
     </div>`;
   const item = { id: file.quarantineId, fileName: file.fileName, originalPath: file.filePath, computerHostname: file.computerHostname };
   content.querySelectorAll('.file-action').forEach((button) => button.addEventListener('click', () => {
@@ -202,6 +204,7 @@ async function showFileDetails(id, { refresh = false } = {}) {
     else if (action === 'quarantine') window.MSTScanActions.quarantine(file.fileName, `/file-events/${file.id}/quarantine`);
     else if (action === 'release') window.MSTScanActions.release(item);
     else if (action === 'delete') window.MSTScanActions.deleteQuarantined(item);
+    else if (action === 'deleteOnComputer') window.MSTScanActions.deleteFromComputer(file);
     else updateFile(file.id, action === 'Reviewed' ? { status: 'Reviewed' } : { classification: action });
   }));
   modal.classList.remove('hidden');

@@ -14,6 +14,7 @@ final class FileEventController
         if ($id !== null && $action === null && $method === 'PUT') self::update($id);
         if ($id !== null && $action === 'scan' && $method === 'POST') self::requestScan($id);
         if ($id !== null && $action === 'quarantine' && $method === 'POST') self::quarantineFile(Validation::id($id));
+        if ($id !== null && $action === 'delete' && $method === 'POST') self::deleteFromComputer($id);
         Response::error('Method not allowed', 'METHOD_NOT_ALLOWED', 405);
     }
 
@@ -91,5 +92,26 @@ final class FileEventController
         $itemId = MySQLRepository::createQuarantine($event, $scanId ?? ($event['scanId'] !== null ? (int)$event['scanId'] : null), $hash, (int)$user['id']);
         MySQLRepository::log((int)$user['id'], 'QUARANTINE_REQUESTED', "Requested quarantine of {$event['fileName']} on {$event['computerHostname']}", 'quarantine', (string)$itemId);
         Response::success('Quarantine requested. The agent on ' . $event['computerHostname'] . ' will move the file into quarantine shortly.', MySQLRepository::findQuarantine($itemId), 201);
+    }
+
+    /**
+     * Deletes the file on the lab computer (Admin, typed DELETE). The agent first moves it into its quarantine folder
+     * (only if it is still in a monitored folder and its SHA-256 is unchanged), then deletes that copy.
+     * Works with existing agents: it reuses their quarantine and delete actions.
+     */
+    private static function deleteFromComputer(string $id): never
+    {
+        $user = RoleMiddleware::allowModule('file_scanner');
+        $event = self::findOrFail($id);
+        if ((Validation::body()['confirm'] ?? null) !== 'DELETE') Validation::fail(['confirm' => 'Type DELETE to confirm']);
+        if ($event['eventType'] === 'deleted' || ($event['quarantineStatus'] ?? null) === 'Deleted') Response::error('The file was already deleted on the computer', 'FILE_DELETED', 409);
+        if (in_array($event['scanState'] ?? null, ['Pending', 'Scanning'], true)) Response::error('Wait until the current scan of this file has finished', 'SCAN_PENDING', 409);
+        $hash = $event['sha256'] ?? null;
+        if ($hash === null || !preg_match('/^[0-9a-f]{64}$/', $hash)) Response::error('The file has no SHA-256, so the agent could not verify it is the same file. Scan it first.', 'NO_HASH', 409);
+        if (MySQLRepository::activeQuarantineForFile((int)$event['id'])) Response::error('This file is in quarantine (or a quarantine action is pending). Use Delete permanently in its quarantine actions.', 'ALREADY_QUARANTINED', 409);
+        $itemId = MySQLRepository::createQuarantine($event, $event['scanId'] !== null ? (int)$event['scanId'] : null, $hash, (int)$user['id'], true);
+        MySQLRepository::log((int)$user['id'], 'FILE_DELETE_REQUESTED', "Requested deletion of {$event['fileName']} on {$event['computerHostname']}", 'quarantine', (string)$itemId);
+        $when = ($event['computerStatus'] ?? null) === 'offline' ? ' when its agent reconnects' : ' shortly';
+        Response::success('Deletion requested. The agent on ' . $event['computerHostname'] . ' will delete the file' . $when . '.', MySQLRepository::findQuarantine($itemId), 201);
     }
 }

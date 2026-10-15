@@ -69,7 +69,8 @@ source, date range), sorting and paging.
 | Scan Again | Admin | New scan job for the agent, or a new scan of the stored upload |
 | Quarantine | Admin, with confirmation | The agent moves the file into its quarantine folder, after verifying its SHA-256 |
 | Release from Quarantine | Admin, with a written reason and typing `RELEASE` | Refused when the latest scan is High; the agent verifies the hash and restores the file |
-| Delete | Admin, typing `DELETE` | **Retention policy:** a file on a lab PC can only be deleted after it was quarantined. An uploaded copy is deleted automatically after the retention period (default 7 days) or earlier by the Admin. Scan records are never deleted. |
+| Delete from computer | Admin, typing `DELETE` (Detected Files → View, next to *Mark Normal*) | The agent on that PC checks that the file is unchanged (same SHA-256), moves it into its quarantine folder and then deletes it permanently (not to the Recycle Bin). A changed file is not deleted; the reason is shown. If the PC is offline, it happens when the agent reconnects. |
+| Delete (quarantined) | Admin, typing `DELETE` | Permanently deletes a file that is already in quarantine. An uploaded copy is deleted automatically after the retention period (default 7 days) or earlier by the Admin. Scan records are never deleted. |
 
 ## Setup
 
