@@ -229,7 +229,9 @@ Real scanning with antivirus engines (Microsoft Defender, built into Windows, an
 
 Adding PCs no longer needs `register-agent.php`, an IP address or a token per PC. Follow **[USER-GUIDE.md](USER-GUIDE.md)**.
 
-- **Computers > Add Computers** creates an enrollment key (valid 1 hour to 7 days, for 1-500 PCs). It is shown once; only
+- **Computers > Add Computers > One PC** registers a single PC and shows its device token once, with a ready
+  `config.json` to download. Each computer's details have **New Token** and **Revoke Access**.
+- **Computers > Add Computers > Many PCs** creates an enrollment key (valid 1 hour to 7 days, for 1-500 PCs). It is shown once; only
   its SHA-256 hash is stored. Keys can be revoked; creating, using, refusing and revoking keys is recorded in Activity Logs.
 - On each PC, **`agent\setup-agent.bat`** installs the agent's packages and enrolls the PC with the key from
   `enrollment.txt`. Each PC gets its own device ID (`MST-PC-###`) and token. A PC that enrolls again keeps its ID.

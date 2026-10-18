@@ -78,8 +78,37 @@ function showComputerDetails(id) {
   // Recent activity, gateway and throughput are demo-only until the Python Agent phase reports them.
   const activity = computerDataIsDemo ? '<p><time>10:42 PM</time> Agent heartbeat received</p><p><time>10:41 PM</time> File scan completed</p><p><time>10:39 PM</time> Network activity recorded</p><p><time>10:35 PM</time> System information updated</p>' : '<p><time>…</time> Loading recent file activity…</p>';
   content.innerHTML = `<div class="detail-grid"><div class="detail-section"><h4>DEVICE INFORMATION</h4><p><span>Computer Name</span><strong>${esc(computer.name)}</strong></p><p><span>Device ID</span><strong>${esc(computer.id)}</strong></p><p><span>IP Address</span><strong>${esc(computer.ip)}</strong></p><p><span>MAC Address</span><strong>${esc(unavailable(computer.mac))}</strong></p><p><span>Operating System</span><strong>${esc(computer.os || 'Windows')}</strong></p><p><span>Agent Version</span><strong>${esc(unavailable(computer.agentVersion))}</strong></p><p><span>Status</span><strong class="status-pill ${esc(computer.status)}">● ${esc(statusText[computer.status] || computer.status)}</strong></p><p><span>Last Seen</span><strong>${esc(computer.lastSeen)}</strong></p></div><div class="detail-section"><h4>SYSTEM RESOURCES</h4>${resourceBar('CPU Usage', computer.cpu)}${resourceBar('Memory Usage', computer.memory)}${resourceBar('Disk Usage', computer.disk)}<p><span>Network</span><strong>${esc(unavailable(computer.network))}</strong></p><h4>SECURITY STATUS</h4><p><span>Threat Level</span><strong class="computer-threat ${esc(computer.threatLevel)}">${esc(threatText[computer.threatLevel] || computer.threatLevel)}</strong></p><p><span>Active Threats</span><strong>${esc(computer.threats)}</strong></p><p><span>Files Scanned</span><strong>${esc(computer.files)}</strong></p><p><span>Suspicious Events</span><strong>${esc(unavailable(computer.events))}</strong></p><p><span>Last Security Scan</span><strong>${esc(computer.scan)}</strong></p></div></div><div class="detail-bottom"><div><h4>NETWORK INFORMATION</h4><p>Gateway <strong>${computerDataIsDemo ? '192.168.1.1' : 'Unavailable'}</strong></p><p>Connection <strong>${computerDataIsDemo ? 'Ethernet' : 'Unavailable'}</strong></p><p>Network status <strong class="${offline ? 'danger-text' : 'success-text'}">● ${offline ? 'Disconnected' : 'Connected'}</strong></p></div><div><h4>AGENT STATUS</h4><p>Agent status <strong class="${agentConnected ? 'success-text' : 'danger-text'}">● ${esc((computer.agentStatus || (agentConnected ? 'connected' : 'disconnected')).toUpperCase())}</strong></p><p>Last heartbeat <strong>${offline ? 'Unavailable' : esc(computer.lastSeen)}</strong></p><p>Upload / Download <strong>${computerDataIsDemo ? `2.4 / ${esc(computer.network)}` : 'Unavailable'}</strong></p></div></div><div class="detail-activity"><h4>RECENT ACTIVITY</h4>${activity}</div>${computer.status === 'threat' ? '<a class="btn-primary detail-threat-link" href="threats.html">View Threats</a>' : ''}`;
+  if (!computerDataIsDemo && computer.dbId) {
+    content.insertAdjacentHTML('beforeend', '<div class="computer-agent-actions"><button class="btn-secondary" data-agent-action="token"><i class="fa-solid fa-key"></i> New Token</button><button class="btn-danger" data-agent-action="revoke"><i class="fa-solid fa-ban"></i> Revoke Access</button></div>');
+    content.querySelector('[data-agent-action="token"]').addEventListener('click', () => newComputerToken(computer));
+    content.querySelector('[data-agent-action="revoke"]').addEventListener('click', () => revokeComputer(computer));
+  }
   modal.classList.remove('hidden');
   if (!computerDataIsDemo && computer.dbId) loadComputerFileActivity(computer);
+}
+
+// New Token: the old token stops working; the new one is shown once with a ready config.json (Add Computers window).
+async function newComputerToken(computer) {
+  if (!window.confirm(`Create a new token for ${computer.name} (${computer.id})? Its old token stops working until you put the new config.json on that PC.`)) return;
+  try {
+    const { data } = await window.MSTApi.apiPost(`/computers/${computer.dbId}/token`, {});
+    document.getElementById('computerDetailsModal')?.classList.add('hidden');
+    window.MSTEnrollment?.open(data);
+  } catch (error) {
+    showMSTToast(mstApiErrorMessage(error, 'Could not create a new token.'), 'computerToast');
+  }
+}
+
+async function revokeComputer(computer) {
+  if (!window.confirm(`Revoke access for ${computer.name} (${computer.id})? The PC can no longer send data until it gets a new token. Its history is kept.`)) return;
+  try {
+    const result = await window.MSTApi.apiPost(`/computers/${computer.dbId}/revoke`, { confirm: true });
+    document.getElementById('computerDetailsModal')?.classList.add('hidden');
+    showMSTToast(result.message, 'computerToast');
+    loadComputers();
+  } catch (error) {
+    showMSTToast(mstApiErrorMessage(error, 'Could not revoke access.'), 'computerToast');
+  }
 }
 
 // Recent file activity reported by this computer's agent (/api/file-events).
@@ -146,6 +175,7 @@ function initializeComputerMonitoring() {
   document.getElementById('refreshComputers')?.addEventListener('click', refreshMonitoring);
   document.getElementById('emptyRefresh')?.addEventListener('click', filterComputers);
   document.querySelectorAll('#computers-page [data-close-modal]').forEach((button) => button.addEventListener('click', () => document.getElementById('computerDetailsModal')?.classList.add('hidden')));
+  document.addEventListener('mst:computers-changed', loadComputers);
   loadComputers();
 }
 

@@ -216,6 +216,13 @@ final class MySQLRepository
 
     private const ENROLLMENT_ACTIVE = 'k.revoked_at IS NULL AND k.expires_at > NOW() AND k.uses < k.max_uses';
 
+    /** Next free device ID: MST-PC-001, MST-PC-002, ... */
+    public static function nextDeviceId(): string
+    {
+        $next = (int)self::db()->query("SELECT COALESCE(MAX(CAST(SUBSTRING(device_id, 8) AS UNSIGNED)), 0) + 1 FROM computers WHERE device_id REGEXP '^MST-PC-[0-9]+$'")->fetchColumn();
+        return sprintf('MST-PC-%03d', $next);
+    }
+
     public static function recentEnrollmentFailures(?string $ip, int $minutes): int
     {
         if ($ip === null) return 0;
@@ -277,8 +284,7 @@ final class MySQLRepository
                 $db->prepare("UPDATE computers SET agent_token_hash = ?, ip_address = ?, operating_system = ? WHERE id = ?")->execute([$tokenHash, $ipAddress, $operatingSystem, $existing['id']]);
                 [$computerId, $deviceId] = [(int)$existing['id'], (string)$existing['device_id']];
             } else {
-                $next = (int)$db->query("SELECT COALESCE(MAX(CAST(SUBSTRING(device_id, 8) AS UNSIGNED)), 0) + 1 FROM computers WHERE device_id REGEXP '^MST-PC-[0-9]+$'")->fetchColumn();
-                $deviceId = sprintf('MST-PC-%03d', $next);
+                $deviceId = self::nextDeviceId();
                 $db->prepare("INSERT INTO computers (device_id, hostname, ip_address, operating_system, status, threat_level, last_seen, agent_status, mac_address, agent_token_hash) VALUES (?, ?, ?, ?, 'offline', 'unknown', 'Never', 'disconnected', ?, ?)")
                     ->execute([$deviceId, $hostname, $ipAddress, $operatingSystem, $macAddress, $tokenHash]);
                 $computerId = (int)$db->lastInsertId();

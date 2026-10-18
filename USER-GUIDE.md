@@ -28,9 +28,28 @@ Two windows open (the API and the website; keep them open) and the browser opens
 
 ---
 
-## Part 2: Create an enrollment key (server)
+## Part 2A: Register ONE PC and get its token (server)
 
-1. Open **Computers** and click **Add Computers**.
+Use this when you add PCs one at a time.
+
+1. Open **Computers** and click **Add Computers**. The **One PC** tab is open.
+2. Type a name (for example `LAB-PC-07` or `Front desk laptop`) and click **Register Computer**.
+3. The PC's **device ID** (for example `MST-PC-007`) and **device token** appear. The token is shown **only once**.
+4. Click **Download config.json**. This file already contains the server address, the device ID and the token.
+5. Put that **config.json** inside the `agent` folder you copy to the PC (Part 3). If your browser saved it as
+   `config (1).json`, rename it to exactly `config.json`.
+
+The PC shows on the Computers list right away as **OFFLINE** until its agent runs. When it connects, its real
+computer name replaces the name you typed.
+
+**Lost the token, or a PC was replaced?** Click **View** on that computer, then **New Token** (the old token stops
+working; download the new config.json). **Revoke Access** stops a PC from sending data; its history is kept.
+
+## Part 2B: Create an enrollment key for MANY PCs (server)
+
+Use this to add a whole lab with one code.
+
+1. Open **Computers**, click **Add Computers** and choose the **Many PCs (enrollment key)** tab.
 2. Enter a name (for example `Lab A`), how long the key is valid (for example **8 hours**) and how many PCs it may add.
 3. Click **Create Key**. The key is shown **only once**.
 4. Click **Download enrollment.txt**. This small file contains the key and the server address.
@@ -45,7 +64,8 @@ Two windows open (the API and the website; keep them open) and the browser opens
 **Once on the server, prepare a USB drive:**
 
 1. Copy the folder `C:\xampp1\htdocs\monitoring\agent` to the USB drive.
-2. Put the downloaded **enrollment.txt** inside that `agent` folder on the USB drive.
+2. Put the downloaded file inside that `agent` folder on the USB drive: **config.json** (one PC, Part 2A) or
+   **enrollment.txt** (many PCs, Part 2B).
 3. Inside the copied folder, delete these if they exist (they belong to the server): `config.json`, `.venv`,
    `quarantine`, `mst_agent.lock`, `mst_agent.log`, `mst_agent_queue.db`.
 
@@ -55,11 +75,12 @@ Two windows open (the API and the website; keep them open) and the browser opens
 2. Copy the `agent` folder from the USB drive to **`C:\MST\agent`** (so that `C:\MST\agent\setup-agent.bat` exists).
 3. Double-click **`setup-agent.bat`**. It:
    - installs the agent's packages,
-   - enrolls the PC with the key from enrollment.txt (it gets its own device ID, for example `MST-PC-006`),
+   - with **config.json**: checks the connection (and finds the server if its address changed);
+   - with **enrollment.txt**: enrolls the PC with the key (it gets its own device ID, for example `MST-PC-006`);
    - asks whether the agent should start automatically when this Windows user signs in (**Y** is recommended).
 4. Wait for **Setup finished**.
 
-No IP address and no token to type. If enrollment.txt is not there, setup asks you to type the key.
+No IP address and no token to type. If neither file is there, setup asks you to type an enrollment key.
 
 ---
 
@@ -102,4 +123,4 @@ computer name and network adapter) keeps its device ID.
 | `The enrollment key is wrong, expired, used up or revoked` | Create a new key (Part 2) and replace enrollment.txt. |
 | `Too many wrong enrollment keys` | Wait 15 minutes, then use the correct key. |
 | PC shows **OFFLINE** | The agent window was closed or the PC is off. Start `C:\MST\agent\start-agent.bat`. |
-| `Device not authorized` | The PC's token was replaced. Run setup-agent.bat again (with an active key). |
+| `Device not authorized` | The PC's token was replaced or revoked. On the server: **View** that computer, **New Token**, then put the new config.json on the PC. Or run setup-agent.bat again with an active enrollment key. |

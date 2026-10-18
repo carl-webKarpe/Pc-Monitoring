@@ -65,6 +65,7 @@ If the API cannot be reached at all, pages fall back to their built-in demo data
 | POST | `/api/file-events/{id}/delete` (`{"confirm":"DELETE"}`): the agent deletes the file on that PC after checking its SHA-256 | file_scanner (Admin only) |
 | POST | `/api/agent/heartbeat`, `/api/agent/events`, `/api/agent/scan-jobs` (scans + quarantine actions), `/api/agent/scan-results`, `/api/agent/action-results` | lab-PC agent (device token, no user session) |
 | POST | `/api/agent/enroll` (`key`, `hostname`, `macAddress`, `operatingSystem` → `deviceId`, `deviceToken`), `/api/agent/identify` (`nonce`, `deviceId` → HMAC proofs) | lab-PC agent before it has a token |
+| POST | `/api/computers` (`name` → device ID, token, ready `config`), `/api/computers/{id}/token` (new token), `/api/computers/{id}/revoke` (`confirm: true`) | computer_monitoring |
 | GET / POST / DELETE | `/api/enrollment` (list keys, create a key: `label`, `hours` 1/8/24/72/168, `maxUses` 1-500), `/api/enrollment/{id}` (revoke) | computer_monitoring |
 
 List endpoints accept `?limit=` (1–500) and `?offset=`. Responses use `{ "success": true, "message": "...", "data": ... }` or `{ "success": false, "message": "...", "error": { "code": "..." } }` with 200/201/400/401/403/404/405/409/422/500 status codes. Database errors are logged server-side and never returned to the client.

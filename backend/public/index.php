@@ -63,7 +63,7 @@ if ($resource === 'agent' && $action === null) AgentController::index($method, $
 if ($resource === 'file-events') FileEventController::index($method, $id, $action);
 if ($resource === 'users') UserController::index($method, $id);
 if ($resource === 'admins') AdminController::index($method, $id);
-if ($resource === 'computers') ComputerController::index($method, $id);
+if ($resource === 'computers') ComputerController::index($method, $id, $action);
 if ($resource === 'enrollment' && $action === null) EnrollmentController::index($method, $id);
 if ($resource === 'threats') ThreatController::index($method, $id, $action);
 if ($resource === 'scans') ScanController::index($method, $id, $action);

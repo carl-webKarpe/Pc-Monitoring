@@ -37,27 +37,53 @@
     <div class="modal hidden" id="computerDetailsModal" role="dialog" aria-modal="true" aria-labelledby="computerDetailTitle"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog computer-detail-dialog"><div class="modal-header"><div><p class="eyebrow">DEVICE INFORMATION</p><h3 id="computerDetailTitle">LAB-PC-01</h3></div><button class="icon-button small" data-close-modal aria-label="Close computer details"><i class="fa-solid fa-xmark"></i></button></div><div id="computerDetailContent"></div></div></div>
     <div class="toast" id="computerToast" role="status"><i class="fa-solid fa-circle-check"></i><span>Monitoring data updated</span></div>
     <div class="modal hidden" id="enrollModal" role="dialog" aria-modal="true" aria-labelledby="enrollTitle"><div class="modal-backdrop" data-close-enroll></div><div class="modal-dialog enroll-dialog"><div class="modal-header"><div><p class="eyebrow">ADD LAB PCS</p><h3 id="enrollTitle">Add Computers</h3></div><button class="icon-button small" data-close-enroll aria-label="Close Add Computers"><i class="fa-solid fa-xmark"></i></button></div>
-      <p class="file-note">Create one <strong>enrollment key</strong> and use it on every PC you want to add. Each PC gets its own device ID automatically and finds this server on the network by itself.</p>
-      <form id="enrollForm" class="enroll-form">
-        <label><span>Name</span><input class="confirm-input" id="enrollLabel" maxlength="80" placeholder="Lab A" /></label>
-        <label><span>Valid for</span><select class="confirm-input" id="enrollHours"><option value="1">1 hour</option><option value="8" selected>8 hours</option><option value="24">1 day</option><option value="72">3 days</option><option value="168">7 days</option></select></label>
-        <label><span>Number of PCs</span><input class="confirm-input" id="enrollMaxUses" type="number" min="1" max="500" value="30" /></label>
-        <button class="btn-primary" type="submit" id="enrollCreate"><i class="fa-solid fa-key"></i> Create Key</button>
-      </form>
-      <p class="scan-note danger hidden" id="enrollError"></p>
-      <section class="enroll-result hidden" id="enrollResult" aria-live="polite">
-        <p class="eyebrow">ENROLLMENT KEY · SHOWN ONLY ONCE</p>
-        <div class="enroll-key" id="enrollKey"></div>
-        <p class="file-note">Server: <strong id="enrollServer"></strong></p>
-        <div class="threat-actions"><button class="btn-secondary" id="enrollCopy" type="button"><i class="fa-solid fa-copy"></i> Copy Key</button><button class="btn-primary" id="enrollDownload" type="button"><i class="fa-solid fa-download"></i> Download enrollment.txt</button></div>
-        <ol class="enroll-steps">
-          <li>Copy the <strong>agent</strong> folder and the downloaded <strong>enrollment.txt</strong> to a USB drive (put enrollment.txt inside the agent folder).</li>
-          <li>On each PC: copy the folder to <strong>C:\MST\agent</strong> and double-click <strong>setup-agent.bat</strong>.</li>
-          <li>The PC appears on this page within a minute. Revoke the key below when you are done.</li>
-        </ol>
-      </section>
-      <h4 class="phase5-subheading">ENROLLMENT KEYS</h4>
-      <div class="table-wrap"><table class="data-table enroll-table"><thead><tr><th>Name</th><th>PCs added</th><th>Expires</th><th>Status</th><th>Action</th></tr></thead><tbody id="enrollKeys"><tr><td colspan="5">Loading…</td></tr></tbody></table></div>
+      <div class="enroll-body">
+        <div class="enroll-tabs" role="tablist"><button class="enroll-tab active" role="tab" data-enroll-tab="one" aria-selected="true">One PC</button><button class="enroll-tab" role="tab" data-enroll-tab="many" aria-selected="false">Many PCs (enrollment key)</button></div>
+
+        <section class="enroll-panel" id="enrollPanelOne">
+          <p class="file-note">Register one PC and get its <strong>device token</strong>. Download the ready <strong>config.json</strong> and put it in the agent folder on that PC.</p>
+          <form id="registerForm" class="enroll-form one">
+            <label><span>Computer name</span><input class="confirm-input" id="registerName" maxlength="120" placeholder="LAB-PC-07 or Front desk laptop" /></label>
+            <button class="btn-primary" type="submit" id="registerCreate"><i class="fa-solid fa-plus"></i> Register Computer</button>
+          </form>
+          <p class="scan-note danger hidden" id="registerError"></p>
+          <section class="enroll-result hidden" id="registerResult" aria-live="polite">
+            <p class="eyebrow">DEVICE TOKEN FOR <span id="registerDevice"></span> · SHOWN ONLY ONCE</p>
+            <div class="enroll-token" id="registerToken"></div>
+            <p class="file-note">Server: <strong id="registerServer"></strong></p>
+            <div class="threat-actions"><button class="btn-secondary" id="registerCopy" type="button"><i class="fa-solid fa-copy"></i> Copy Token</button><button class="btn-primary" id="registerDownload" type="button"><i class="fa-solid fa-download"></i> Download config.json</button></div>
+            <ol class="enroll-steps">
+              <li>Copy the <strong>agent</strong> folder to a USB drive and put the downloaded <strong>config.json</strong> inside it.</li>
+              <li>On the PC: copy the folder to <strong>C:\MST\agent</strong> and double-click <strong>setup-agent.bat</strong>.</li>
+              <li>The PC shows <strong>ONLINE</strong> on this page within a minute. Its real computer name replaces the name above.</li>
+            </ol>
+          </section>
+        </section>
+
+        <section class="enroll-panel hidden" id="enrollPanelMany">
+          <p class="file-note">Create one <strong>enrollment key</strong> and use it on every PC you want to add. Each PC gets its own device ID automatically and finds this server on the network by itself.</p>
+          <form id="enrollForm" class="enroll-form">
+            <label><span>Name</span><input class="confirm-input" id="enrollLabel" maxlength="80" placeholder="Lab A" /></label>
+            <label><span>Valid for</span><select class="confirm-input" id="enrollHours"><option value="1">1 hour</option><option value="8" selected>8 hours</option><option value="24">1 day</option><option value="72">3 days</option><option value="168">7 days</option></select></label>
+            <label><span>Number of PCs</span><input class="confirm-input" id="enrollMaxUses" type="number" min="1" max="500" value="30" /></label>
+            <button class="btn-primary" type="submit" id="enrollCreate"><i class="fa-solid fa-key"></i> Create Key</button>
+          </form>
+          <p class="scan-note danger hidden" id="enrollError"></p>
+          <section class="enroll-result hidden" id="enrollResult" aria-live="polite">
+            <p class="eyebrow">ENROLLMENT KEY · SHOWN ONLY ONCE</p>
+            <div class="enroll-key" id="enrollKey"></div>
+            <p class="file-note">Server: <strong id="enrollServer"></strong></p>
+            <div class="threat-actions"><button class="btn-secondary" id="enrollCopy" type="button"><i class="fa-solid fa-copy"></i> Copy Key</button><button class="btn-primary" id="enrollDownload" type="button"><i class="fa-solid fa-download"></i> Download enrollment.txt</button></div>
+            <ol class="enroll-steps">
+              <li>Copy the <strong>agent</strong> folder and the downloaded <strong>enrollment.txt</strong> to a USB drive (put enrollment.txt inside the agent folder).</li>
+              <li>On each PC: copy the folder to <strong>C:\MST\agent</strong> and double-click <strong>setup-agent.bat</strong>.</li>
+              <li>The PCs appear on this page within a minute. Revoke the key below when you are done.</li>
+            </ol>
+          </section>
+          <h4 class="phase5-subheading">ENROLLMENT KEYS</h4>
+          <div class="table-wrap"><table class="data-table enroll-table"><thead><tr><th>Name</th><th>PCs added</th><th>Expires</th><th>Status</th><th>Action</th></tr></thead><tbody id="enrollKeys"><tr><td colspan="5">Loading…</td></tr></tbody></table></div>
+        </section>
+      </div>
     </div></div>
     <script src="assets/js/api.js"></script>
     <script src="assets/js/app.js"></script><script src="assets/js/computers.js"></script><script src="assets/js/enrollment.js"></script>
