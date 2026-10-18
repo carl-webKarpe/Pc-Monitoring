@@ -17,17 +17,17 @@ final class MySQLRepository
         (SELECT COUNT(*) FROM scans s WHERE s.computer_id = c.id) AS scan_count,
         (SELECT MAX(COALESCE(s.completed_at, s.created_at)) FROM scans s WHERE s.computer_id = c.id) AS last_scan_at
         FROM computers c";
-    private const THREAT_SELECT = 'SELECT t.*, c.hostname AS computer_hostname, c.device_id AS computer_device_id, c.ip_address AS computer_ip_address, c.status AS computer_status
+    private const THREAT_SELECT = 'SELECT t.*, COALESCE(c.display_name, c.hostname) AS computer_hostname, c.device_id AS computer_device_id, c.ip_address AS computer_ip_address, c.status AS computer_status
         FROM threats t LEFT JOIN computers c ON c.id = t.computer_id';
     // Pre-Phase-13 results used Critical/Low; they are shown as High/Unknown in the five-level scale.
     private const RISK_CLASS = "CASE s.risk_level WHEN 'Critical' THEN 'High' WHEN 'Low' THEN 'Unknown' ELSE s.risk_level END";
     private const SCAN_FROM = ' FROM scans s LEFT JOIN computers c ON c.id = s.computer_id LEFT JOIN users u ON u.id = s.created_by LEFT JOIN file_events f ON f.id = s.file_event_id
         LEFT JOIN quarantine_items q ON q.id = (SELECT MAX(q2.id) FROM quarantine_items q2 WHERE q2.file_event_id = s.file_event_id)';
-    private const SCAN_SELECT = 'SELECT s.*, ' . self::RISK_CLASS . ' AS risk_class, (s.stored_file IS NOT NULL) AS stored_copy, c.hostname AS computer_hostname, c.device_id AS computer_device_id, c.status AS computer_status,
+    private const SCAN_SELECT = 'SELECT s.*, ' . self::RISK_CLASS . ' AS risk_class, (s.stored_file IS NOT NULL) AS stored_copy, COALESCE(c.display_name, c.hostname) AS computer_hostname, c.device_id AS computer_device_id, c.status AS computer_status,
         u.username AS created_by_username, f.event_type AS file_event_type, q.id AS quarantine_id, q.status AS quarantine_status, q.last_error AS quarantine_error' . self::SCAN_FROM;
     private const RESOURCES = ['computers' => [self::COMPUTER_SELECT, 'c'], 'threats' => [self::THREAT_SELECT, 't'], 'scans' => [self::SCAN_SELECT, 's']];
     private const FILTERABLE = ['threats' => ['severity', 'status', 'computer_id'], 'scans' => ['status', 'scan_type', 'computer_id'], 'file_events' => ['computer_id', 'event_type', 'status']];
-    private const FILE_EVENT_SELECT = 'SELECT f.*, c.hostname AS computer_hostname, c.device_id AS computer_device_id, c.ip_address AS computer_ip_address, c.status AS computer_status,
+    private const FILE_EVENT_SELECT = 'SELECT f.*, COALESCE(c.display_name, c.hostname) AS computer_hostname, c.device_id AS computer_device_id, c.ip_address AS computer_ip_address, c.status AS computer_status,
         s.status AS scan_status, s.scan_state AS scan_state, s.completed_at AS scan_completed_at, s.scan_details AS scan_details, s.detection AS scan_detection, s.evidence_strength AS scan_evidence_strength,
         q.id AS quarantine_id, q.status AS quarantine_status, q.last_error AS quarantine_error
         FROM file_events f JOIN computers c ON c.id = f.computer_id LEFT JOIN scans s ON s.id = f.scan_id
@@ -387,8 +387,8 @@ final class MySQLRepository
         if (($filters['q'] ?? '') !== '') {
             $like = '%' . addcslashes($filters['q'], '%_\\') . '%';
             $id = preg_match('/^(?:SCN-)?0*(\d{1,9})$/i', $filters['q'], $match) ? (int)$match[1] : 0;
-            $where[] = '(s.file_name LIKE ? OR s.file_hash LIKE ? OR c.hostname LIKE ? OR c.device_id LIKE ? OR s.id = ?)';
-            array_push($params, $like, $like, $like, $like, $id);
+            $where[] = '(s.file_name LIKE ? OR s.file_hash LIKE ? OR c.hostname LIKE ? OR c.display_name LIKE ? OR c.device_id LIKE ? OR s.id = ?)';
+            array_push($params, $like, $like, $like, $like, $like, $id);
         }
         if (isset($filters['risk'])) { $where[] = self::RISK_CLASS . ' = ?'; $params[] = $filters['risk']; }
         if (isset($filters['state'])) { $where[] = 's.scan_state = ?'; $params[] = $filters['state']; }
@@ -470,7 +470,7 @@ final class MySQLRepository
 
     // ---- Quarantine (Phase 13) -------------------------------------------------------------------------
 
-    private const QUARANTINE_SELECT = "SELECT q.*, c.hostname AS computer_hostname, c.device_id AS computer_device_id, c.status AS computer_status, u.username AS requested_by_username,
+    private const QUARANTINE_SELECT = "SELECT q.*, COALESCE(c.display_name, c.hostname) AS computer_hostname, c.device_id AS computer_device_id, c.status AS computer_status, u.username AS requested_by_username,
         (SELECT CASE s.risk_level WHEN 'Critical' THEN 'High' WHEN 'Low' THEN 'Unknown' ELSE s.risk_level END FROM scans s WHERE s.file_event_id = q.file_event_id AND s.scan_state IN ('Completed', 'Failed') ORDER BY s.id DESC LIMIT 1) AS latest_risk
         FROM quarantine_items q JOIN computers c ON c.id = q.computer_id LEFT JOIN users u ON u.id = q.requested_by";
     public const QUARANTINE_ACTIVE = ['Quarantine Requested', 'Quarantined', 'Release Requested', 'Delete Requested'];

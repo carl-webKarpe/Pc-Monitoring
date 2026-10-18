@@ -1,6 +1,6 @@
 // Detected Files: file activity reported by the lab-PC agents (/api/file-events), classification, scans and quarantine.
 // ?computer=<id> (from a computer's details window) preselects that computer once.
-const fileState = { rows: [], openId: null, timer: null, linkedComputer: new URLSearchParams(window.location.search).get('computer') };
+const fileState = { rows: [], computers: [], openId: null, timer: null, linkedComputer: new URLSearchParams(window.location.search).get('computer') };
 const FILE_REFRESH_MS = 10000;
 const fileEsc = (value) => mstEscape(value);
 const fileStatusClass = (status) => String(status).toLowerCase().replace(/\s+/g, '-');
@@ -73,7 +73,10 @@ function populateFileComputerFilter() {
   if (!select) return;
   const current = fileState.linkedComputer || select.value || 'all';
   fileState.linkedComputer = null;
-  const computers = [...new Map(fileState.rows.map((file) => [String(file.computerId), file.computerHostname])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  // Every registered computer (also those that have not reported a file yet), plus any computer that appears in the files.
+  const names = new Map(fileState.computers.map((computer) => [String(computer.id), `${computer.displayName || computer.hostname} (${computer.deviceId})`]));
+  fileState.rows.forEach((file) => { if (!names.has(String(file.computerId))) names.set(String(file.computerId), `${file.computerHostname} (${file.computerDeviceId})`); });
+  const computers = [...names.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   select.innerHTML = `<option value="all">All computers</option>${computers.map(([id, name]) => `<option value="${fileEsc(id)}">${fileEsc(name)}</option>`).join('')}`;
   select.value = computers.some(([id]) => id === current) ? current : 'all';
 }
@@ -111,7 +114,9 @@ function renderFiles() {
 
 async function loadFiles({ quiet = false } = {}) {
   try {
-    fileState.rows = (await window.MSTApi.apiGet('/file-events?limit=500')).data;
+    const [files, computers] = await Promise.all([window.MSTApi.apiGet('/file-events?limit=500'), window.MSTApi.apiGet('/computers').catch(() => ({ data: [] }))]);
+    fileState.rows = files.data;
+    fileState.computers = Array.isArray(computers.data) ? computers.data : [];
   } catch (error) {
     if (!quiet) showMSTToast(mstApiErrorMessage(error, 'Unable to load detected files.'), 'fileToast');
     return;
