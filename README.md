@@ -241,7 +241,11 @@ Adding PCs no longer needs `register-agent.php`, an IP address or a token per PC
 - **`start-server.bat`** starts the API (on all network adapters, port 8081) and the website.
 - Wrong keys are limited to 10 per IP address per 15 minutes.
 
-**Update an existing database:** run `database/migrations/phase15_enrollment.sql` in MySQL Workbench (safe to run again).
+- Each computer can be **renamed** (stored separately; the agent keeps reporting the Windows name) and **deleted** (typed `DELETE`;
+  scans, threats and Activity Logs are kept).
+
+**Update an existing database:** run `database/migrations/phase15_enrollment.sql`, then `database/migrations/phase15_rename.sql`
+in MySQL Workbench (both are safe to run again).
 
 ## Phase 14 - Super Admin Phone Approval (QR code)
 

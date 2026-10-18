@@ -39,8 +39,12 @@ Use this when you add PCs one at a time.
 5. Put that **config.json** inside the `agent` folder you copy to the PC (Part 3). If your browser saved it as
    `config (1).json`, rename it to exactly `config.json`.
 
-The PC shows on the Computers list right away as **OFFLINE** until its agent runs. When it connects, its real
-computer name replaces the name you typed.
+The PC shows on the Computers list right away as **OFFLINE** until its agent runs. It keeps the name you typed;
+its Windows computer name is shown under it once it connects.
+
+**Rename / Delete:** each row on **Computers** has **Rename** (your own name; leave it empty to show the Windows name)
+and **Delete** (type `DELETE`). Delete removes the PC, its detected-file list and its quarantine records, and its agent
+can no longer connect. Scan results, threats and Activity Logs are kept.
 
 **Lost the token, or a PC was replaced?** Click **View** on that computer, then **New Token** (the old token stops
 working; download the new config.json). **Revoke Access** stops a PC from sending data; its history is kept.

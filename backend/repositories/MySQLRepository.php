@@ -201,6 +201,19 @@ final class MySQLRepository
 
     public static function setPassword(int $userId, string $password): void { self::db()->prepare('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?')->execute([password_hash($password, PASSWORD_DEFAULT), $userId]); }
 
+    /** Your own name for a computer; null shows the agent's real computer name again. */
+    public static function renameComputer(int $computerId, ?string $displayName): void { self::db()->prepare('UPDATE computers SET display_name = ? WHERE id = ?')->execute([$displayName, $computerId]); }
+
+    /** Removes a computer. Its file activity and quarantine records go with it (ON DELETE CASCADE); scans and threats stay, without a computer. */
+    public static function deleteComputer(int $computerId): int
+    {
+        $statement = self::db()->prepare('SELECT COUNT(*) FROM file_events WHERE computer_id = ?');
+        $statement->execute([$computerId]);
+        $fileEvents = (int)$statement->fetchColumn();
+        self::db()->prepare('DELETE FROM computers WHERE id = ?')->execute([$computerId]);
+        return $fileEvents;
+    }
+
     public static function revokeAgent(int $computerId): void { self::db()->prepare("UPDATE computers SET agent_token_hash = NULL, agent_status = 'disconnected', status = 'offline' WHERE id = ?")->execute([$computerId]); }
 
     /** Creates the computer if needed and stores a new agent token hash. @return array{0: int, 1: bool, 2: bool} [computer id, created, replaced an existing token] */

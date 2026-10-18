@@ -65,6 +65,7 @@ If the API cannot be reached at all, pages fall back to their built-in demo data
 | POST | `/api/file-events/{id}/delete` (`{"confirm":"DELETE"}`): the agent deletes the file on that PC after checking its SHA-256 | file_scanner (Admin only) |
 | POST | `/api/agent/heartbeat`, `/api/agent/events`, `/api/agent/scan-jobs` (scans + quarantine actions), `/api/agent/scan-results`, `/api/agent/action-results` | lab-PC agent (device token, no user session) |
 | POST | `/api/agent/enroll` (`key`, `hostname`, `macAddress`, `operatingSystem` → `deviceId`, `deviceToken`), `/api/agent/identify` (`nonce`, `deviceId` → HMAC proofs) | lab-PC agent before it has a token |
+| PUT / DELETE | `/api/computers/{id}` (rename: `name`, empty = Windows name; delete: `confirm: "DELETE"`) | computer_monitoring |
 | POST | `/api/computers` (`name` → device ID, token, ready `config`), `/api/computers/{id}/token` (new token), `/api/computers/{id}/revoke` (`confirm: true`) | computer_monitoring |
 | GET / POST / DELETE | `/api/enrollment` (list keys, create a key: `label`, `hours` 1/8/24/72/168, `maxUses` 1-500), `/api/enrollment/{id}` (revoke) | computer_monitoring |
 

@@ -13,7 +13,7 @@ let computerDataIsDemo = false;
 // Maps a MySQL-backed /api/computers record onto the structure the existing UI already renders.
 // MAC, disk, agent version and last heartbeat come from the lab-PC agent once it is registered and running.
 function fromApiComputer(computer) {
-  return { dbId: computer.id, id: computer.deviceId, name: computer.hostname, ip: computer.ipAddress, mac: computer.macAddress ?? null, os: computer.operatingSystem, status: computer.status, threatLevel: computer.threatLevel, cpu: computer.cpuUsage ?? null, memory: computer.memoryUsage ?? null, disk: computer.diskUsage ?? null, network: null, agentVersion: computer.agentVersion ?? null, agentStatus: computer.agentStatus, lastSeen: computer.lastHeartbeatAt ? mstTimeAgo(computer.lastHeartbeatAt) : computer.lastSeen, lastHeartbeatAt: computer.lastHeartbeatAt ?? null, threats: Number(computer.activeThreats || 0), files: Number(computer.scanCount || 0), events: null, scan: computer.lastScanAt ? mstTimeAgo(computer.lastScanAt) : 'No scans recorded' };
+  return { dbId: computer.id, id: computer.deviceId, name: computer.displayName || computer.hostname, hostname: computer.hostname, customName: computer.displayName || null, ip: computer.ipAddress, mac: computer.macAddress ?? null, os: computer.operatingSystem, status: computer.status, threatLevel: computer.threatLevel, cpu: computer.cpuUsage ?? null, memory: computer.memoryUsage ?? null, disk: computer.diskUsage ?? null, network: null, agentVersion: computer.agentVersion ?? null, agentStatus: computer.agentStatus, lastSeen: computer.lastHeartbeatAt ? mstTimeAgo(computer.lastHeartbeatAt) : computer.lastSeen, lastHeartbeatAt: computer.lastHeartbeatAt ?? null, threats: Number(computer.activeThreats || 0), files: Number(computer.scanCount || 0), events: null, scan: computer.lastScanAt ? mstTimeAgo(computer.lastScanAt) : 'No scans recorded' };
 }
 
 async function fetchComputers() {
@@ -53,9 +53,11 @@ function renderComputers(computers) {
   if (!body || !empty) return;
   empty.classList.toggle('hidden', computers.length > 0);
   const esc = mstEscape;
-  body.innerHTML = computers.map((computer) => `<tr><td><i class="fa-solid fa-desktop table-icon"></i><strong>${esc(computer.name)}</strong></td><td>${esc(computer.id)}</td><td>${esc(computer.ip)}</td><td><span class="status-pill ${esc(computer.status)}">● ${esc(statusText[computer.status] || computer.status)}</span></td><td><span class="computer-threat ${esc(computer.threatLevel)}">${esc(threatText[computer.threatLevel] || computer.threatLevel)}</span></td><td>${computer.cpu === null ? '—' : `${esc(computer.cpu)}%`}</td><td>${computer.memory === null ? '—' : `${esc(computer.memory)}%`}</td><td>${esc(computer.lastSeen)}</td><td><button class="link-button view-computer" data-computer-id="${esc(computer.id)}">View</button></td></tr>`).join('');
+  body.innerHTML = computers.map((computer) => `<tr><td><i class="fa-solid fa-desktop table-icon"></i><strong>${esc(computer.name)}</strong>${computer.customName && computer.hostname !== computer.customName ? `<small class="table-subtext">${esc(computer.hostname)}</small>` : ''}</td><td>${esc(computer.id)}</td><td>${esc(computer.ip)}</td><td><span class="status-pill ${esc(computer.status)}">● ${esc(statusText[computer.status] || computer.status)}</span></td><td><span class="computer-threat ${esc(computer.threatLevel)}">${esc(threatText[computer.threatLevel] || computer.threatLevel)}</span></td><td>${computer.cpu === null ? '—' : `${esc(computer.cpu)}%`}</td><td>${computer.memory === null ? '—' : `${esc(computer.memory)}%`}</td><td>${esc(computer.lastSeen)}</td><td><button class="link-button view-computer" data-computer-id="${esc(computer.id)}">View</button>${computerDataIsDemo || !computer.dbId ? '' : ` <button class="link-button rename-computer" data-computer-id="${esc(computer.id)}">Rename</button> <button class="link-button danger-text delete-computer" data-computer-id="${esc(computer.id)}">Delete</button>`}</td></tr>`).join('');
   document.querySelector('#computers-page #computerCount').textContent = computers.length ? `Showing 1-${computers.length} of ${computerRows.length} computers${computerDataIsDemo ? ' (demo data)' : ''}` : 'Showing 0 computers';
   body.querySelectorAll('.view-computer').forEach((button) => button.addEventListener('click', () => showComputerDetails(button.dataset.computerId)));
+  body.querySelectorAll('.rename-computer').forEach((button) => button.addEventListener('click', () => renameComputer(computerRows.find((item) => item.id === button.dataset.computerId))));
+  body.querySelectorAll('.delete-computer').forEach((button) => button.addEventListener('click', () => deleteComputer(computerRows.find((item) => item.id === button.dataset.computerId))));
 }
 
 function renderNetworkTopology() {
@@ -77,7 +79,7 @@ function showComputerDetails(id) {
   const agentConnected = (computer.agentStatus || (offline ? 'disconnected' : 'connected')) === 'connected';
   // Recent activity, gateway and throughput are demo-only until the Python Agent phase reports them.
   const activity = computerDataIsDemo ? '<p><time>10:42 PM</time> Agent heartbeat received</p><p><time>10:41 PM</time> File scan completed</p><p><time>10:39 PM</time> Network activity recorded</p><p><time>10:35 PM</time> System information updated</p>' : '<p><time>…</time> Loading recent file activity…</p>';
-  content.innerHTML = `<div class="detail-grid"><div class="detail-section"><h4>DEVICE INFORMATION</h4><p><span>Computer Name</span><strong>${esc(computer.name)}</strong></p><p><span>Device ID</span><strong>${esc(computer.id)}</strong></p><p><span>IP Address</span><strong>${esc(computer.ip)}</strong></p><p><span>MAC Address</span><strong>${esc(unavailable(computer.mac))}</strong></p><p><span>Operating System</span><strong>${esc(computer.os || 'Windows')}</strong></p><p><span>Agent Version</span><strong>${esc(unavailable(computer.agentVersion))}</strong></p><p><span>Status</span><strong class="status-pill ${esc(computer.status)}">● ${esc(statusText[computer.status] || computer.status)}</strong></p><p><span>Last Seen</span><strong>${esc(computer.lastSeen)}</strong></p></div><div class="detail-section"><h4>SYSTEM RESOURCES</h4>${resourceBar('CPU Usage', computer.cpu)}${resourceBar('Memory Usage', computer.memory)}${resourceBar('Disk Usage', computer.disk)}<p><span>Network</span><strong>${esc(unavailable(computer.network))}</strong></p><h4>SECURITY STATUS</h4><p><span>Threat Level</span><strong class="computer-threat ${esc(computer.threatLevel)}">${esc(threatText[computer.threatLevel] || computer.threatLevel)}</strong></p><p><span>Active Threats</span><strong>${esc(computer.threats)}</strong></p><p><span>Files Scanned</span><strong>${esc(computer.files)}</strong></p><p><span>Suspicious Events</span><strong>${esc(unavailable(computer.events))}</strong></p><p><span>Last Security Scan</span><strong>${esc(computer.scan)}</strong></p></div></div><div class="detail-bottom"><div><h4>NETWORK INFORMATION</h4><p>Gateway <strong>${computerDataIsDemo ? '192.168.1.1' : 'Unavailable'}</strong></p><p>Connection <strong>${computerDataIsDemo ? 'Ethernet' : 'Unavailable'}</strong></p><p>Network status <strong class="${offline ? 'danger-text' : 'success-text'}">● ${offline ? 'Disconnected' : 'Connected'}</strong></p></div><div><h4>AGENT STATUS</h4><p>Agent status <strong class="${agentConnected ? 'success-text' : 'danger-text'}">● ${esc((computer.agentStatus || (agentConnected ? 'connected' : 'disconnected')).toUpperCase())}</strong></p><p>Last heartbeat <strong>${offline ? 'Unavailable' : esc(computer.lastSeen)}</strong></p><p>Upload / Download <strong>${computerDataIsDemo ? `2.4 / ${esc(computer.network)}` : 'Unavailable'}</strong></p></div></div><div class="detail-activity"><h4>RECENT ACTIVITY</h4>${activity}</div>${computer.status === 'threat' ? '<a class="btn-primary detail-threat-link" href="threats.html">View Threats</a>' : ''}`;
+  content.innerHTML = `<div class="detail-grid"><div class="detail-section"><h4>DEVICE INFORMATION</h4><p><span>Computer Name</span><strong>${esc(computer.name)}</strong></p>${computer.customName && computer.hostname !== computer.customName ? `<p><span>Windows Name</span><strong>${esc(computer.hostname)}</strong></p>` : ''}<p><span>Device ID</span><strong>${esc(computer.id)}</strong></p><p><span>IP Address</span><strong>${esc(computer.ip)}</strong></p><p><span>MAC Address</span><strong>${esc(unavailable(computer.mac))}</strong></p><p><span>Operating System</span><strong>${esc(computer.os || 'Windows')}</strong></p><p><span>Agent Version</span><strong>${esc(unavailable(computer.agentVersion))}</strong></p><p><span>Status</span><strong class="status-pill ${esc(computer.status)}">● ${esc(statusText[computer.status] || computer.status)}</strong></p><p><span>Last Seen</span><strong>${esc(computer.lastSeen)}</strong></p></div><div class="detail-section"><h4>SYSTEM RESOURCES</h4>${resourceBar('CPU Usage', computer.cpu)}${resourceBar('Memory Usage', computer.memory)}${resourceBar('Disk Usage', computer.disk)}<p><span>Network</span><strong>${esc(unavailable(computer.network))}</strong></p><h4>SECURITY STATUS</h4><p><span>Threat Level</span><strong class="computer-threat ${esc(computer.threatLevel)}">${esc(threatText[computer.threatLevel] || computer.threatLevel)}</strong></p><p><span>Active Threats</span><strong>${esc(computer.threats)}</strong></p><p><span>Files Scanned</span><strong>${esc(computer.files)}</strong></p><p><span>Suspicious Events</span><strong>${esc(unavailable(computer.events))}</strong></p><p><span>Last Security Scan</span><strong>${esc(computer.scan)}</strong></p></div></div><div class="detail-bottom"><div><h4>NETWORK INFORMATION</h4><p>Gateway <strong>${computerDataIsDemo ? '192.168.1.1' : 'Unavailable'}</strong></p><p>Connection <strong>${computerDataIsDemo ? 'Ethernet' : 'Unavailable'}</strong></p><p>Network status <strong class="${offline ? 'danger-text' : 'success-text'}">● ${offline ? 'Disconnected' : 'Connected'}</strong></p></div><div><h4>AGENT STATUS</h4><p>Agent status <strong class="${agentConnected ? 'success-text' : 'danger-text'}">● ${esc((computer.agentStatus || (agentConnected ? 'connected' : 'disconnected')).toUpperCase())}</strong></p><p>Last heartbeat <strong>${offline ? 'Unavailable' : esc(computer.lastSeen)}</strong></p><p>Upload / Download <strong>${computerDataIsDemo ? `2.4 / ${esc(computer.network)}` : 'Unavailable'}</strong></p></div></div><div class="detail-activity"><h4>RECENT ACTIVITY</h4>${activity}</div>${computer.status === 'threat' ? '<a class="btn-primary detail-threat-link" href="threats.html">View Threats</a>' : ''}`;
   if (!computerDataIsDemo && computer.dbId) {
     content.insertAdjacentHTML('beforeend', '<div class="computer-agent-actions"><button class="btn-secondary" data-agent-action="token"><i class="fa-solid fa-key"></i> New Token</button><button class="btn-danger" data-agent-action="revoke"><i class="fa-solid fa-ban"></i> Revoke Access</button></div>');
     content.querySelector('[data-agent-action="token"]').addEventListener('click', () => newComputerToken(computer));
@@ -96,6 +98,33 @@ async function newComputerToken(computer) {
     window.MSTEnrollment?.open(data);
   } catch (error) {
     showMSTToast(mstApiErrorMessage(error, 'Could not create a new token.'), 'computerToast');
+  }
+}
+
+async function renameComputer(computer) {
+  if (!computer) return;
+  const name = window.prompt(`New name for ${computer.id} (Windows name: ${computer.hostname}).\nLeave it empty to show the Windows name again.`, computer.customName || computer.name);
+  if (name === null) return;
+  try {
+    const result = await window.MSTApi.apiPut(`/computers/${computer.dbId}`, { name: name.trim() });
+    showMSTToast(result.message, 'computerToast');
+    loadComputers();
+  } catch (error) {
+    const details = error.payload?.errors ? Object.values(error.payload.errors).join(' ') : '';
+    showMSTToast(details || mstApiErrorMessage(error, 'Could not rename the computer.'), 'computerToast');
+  }
+}
+
+async function deleteComputer(computer) {
+  if (!computer) return;
+  const typed = window.prompt(`Delete ${computer.name} (${computer.id}) from MST?\n\nThis removes the computer, its detected-file list and quarantine records. Its agent can no longer connect. Scan results, threats and Activity Logs are kept.\n\nType DELETE to confirm:`);
+  if (typed === null) return;
+  try {
+    const result = await window.MSTApi.apiRequest(`/computers/${computer.dbId}`, { method: 'DELETE', body: JSON.stringify({ confirm: typed.trim() }) });
+    showMSTToast(result.message, 'computerToast');
+    loadComputers();
+  } catch (error) {
+    showMSTToast(error.status === 422 ? 'Not deleted: type DELETE in capital letters to confirm.' : mstApiErrorMessage(error, 'Could not delete the computer.'), 'computerToast');
   }
 }
 
@@ -133,7 +162,7 @@ function filterComputers() {
   const status = document.getElementById('statusFilter')?.value || 'all';
   const threat = document.getElementById('threatFilter')?.value || 'all';
   const sort = document.getElementById('sortFilter')?.value || 'name';
-  const filtered = computerRows.filter((computer) => `${computer.name} ${computer.id} ${computer.ip}`.toLowerCase().includes(query) && (status === 'all' || computer.status === status) && (threat === 'all' || computer.threatLevel === threat)).sort((first, second) => sort === 'threats' ? second.threats - first.threats : sort === 'status' ? first.status.localeCompare(second.status) : first.name.localeCompare(second.name));
+  const filtered = computerRows.filter((computer) => `${computer.name} ${computer.hostname || ''} ${computer.id} ${computer.ip}`.toLowerCase().includes(query) && (status === 'all' || computer.status === status) && (threat === 'all' || computer.threatLevel === threat)).sort((first, second) => sort === 'threats' ? second.threats - first.threats : sort === 'status' ? first.status.localeCompare(second.status) : first.name.localeCompare(second.name));
   renderComputers(filtered);
 }
 
