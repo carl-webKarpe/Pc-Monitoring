@@ -225,6 +225,22 @@ Login lockout, idle session timeout, CSRF protection, strong passwords, security
 
 Real scanning with antivirus engines (Microsoft Defender, built into Windows, and/or ClamAV) on the lab PCs and on the MST server, VirusTotal, the hash blocklist and static file analysis. Five honest risk levels (**Safe, Medium, High, Unknown, Failed**) with an evidence-strength rating instead of invented percentages; a full Scan History table (search, filters, sorting, paging, CSV and report export); real uploads on the File Scanner page; automatic scans of new files; quarantine / release / delete on lab PCs; investigations; a dashboard built only from database data. Setup, rules and testing: **[SCANNER.md](SCANNER.md)**. Existing databases: run `database/migrations/phase13_scanner.sql` once after `phase12_security.sql`.
 
+## Phase 15 - Add lab PCs with one enrollment key
+
+Adding PCs no longer needs `register-agent.php`, an IP address or a token per PC. Follow **[USER-GUIDE.md](USER-GUIDE.md)**.
+
+- **Computers > Add Computers** creates an enrollment key (valid 1 hour to 7 days, for 1-500 PCs). It is shown once; only
+  its SHA-256 hash is stored. Keys can be revoked; creating, using, refusing and revoking keys is recorded in Activity Logs.
+- On each PC, **`agent\setup-agent.bat`** installs the agent's packages and enrolls the PC with the key from
+  `enrollment.txt`. Each PC gets its own device ID (`MST-PC-###`) and token. A PC that enrolls again keeps its ID.
+- Agents **find the server on the local network** (no IP to type) and search again when its address changes. The server
+  proves its identity first (`/api/agent/identify`: HMAC of a random nonce keyed with the stored token/key hash), so an
+  agent never sends its token or the key to another computer.
+- **`start-server.bat`** starts the API (on all network adapters, port 8081) and the website.
+- Wrong keys are limited to 10 per IP address per 15 minutes.
+
+**Update an existing database:** run `database/migrations/phase15_enrollment.sql` in MySQL Workbench (safe to run again).
+
 ## Phase 14 - Super Admin Phone Approval (QR code)
 
 After the correct password, the Super Admin sign-in must be approved on a **paired phone**: the laptop shows a QR code, the phone scans it, checks that the 2-digit number matches and taps **Approve**, and the laptop goes to the dashboard. Admin accounts are not affected. Pair the phone once in **Settings → Phone Verification** (the phone must be on the same Wi-Fi as the laptop). Lost phone: `php backend/tools/reset-phone.php superadmin`. Existing databases: run `database/migrations/phase14_phone_login.sql` once. Details: [SECURITY.md](SECURITY.md).

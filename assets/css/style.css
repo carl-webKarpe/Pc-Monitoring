@@ -1772,3 +1772,18 @@ textarea.confirm-input { min-height: 80px; resize: vertical; }
 .device-list small { display: block; color: var(--muted); font-size: 0.66rem; }
 .pair-panel { display: grid; justify-items: center; gap: 0.6rem; padding: 0.8rem 0; text-align: center; }
 .pair-panel.hidden { display: none; }
+
+/* Phase 15: Computers > Add Computers (enrollment keys) */
+.enroll-dialog { width: min(720px, calc(100vw - 32px)); }
+.enroll-form { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 0.75rem; align-items: end; margin: 0.8rem 0; }
+.enroll-form label span { display: block; color: var(--muted, #94A3B8); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.enroll-form .confirm-input { margin-top: 0.3rem; }
+.enroll-result { margin: 0.6rem 0 1rem; padding: 1rem; border: 1px solid rgba(0,217,255,0.35); border-radius: 12px; background: rgba(0,217,255,0.06); }
+.enroll-result.hidden, #enrollError.hidden { display: none; }
+.enroll-key { margin: 0.4rem 0 0.6rem; font: 700 clamp(1.3rem, 5vw, 2rem)/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: 0.08em; color: #00D9FF; word-break: break-all; user-select: all; }
+.enroll-steps { margin: 0.8rem 0 0; padding-left: 1.2rem; color: var(--muted, #94A3B8); font-size: 0.82rem; line-height: 1.6; }
+.enroll-table td, .enroll-table th { white-space: nowrap; }
+@media (max-width: 640px) { .enroll-form { grid-template-columns: 1fr 1fr; } .enroll-form label:first-child, .enroll-form button { grid-column: 1 / -1; } }
+.enroll-dialog { padding-bottom: 1.25rem; }
+.enroll-dialog > *:not(.modal-header) { margin-inline: 1.25rem; }
+.enroll-form button { min-height: 40px; }

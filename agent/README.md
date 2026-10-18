@@ -1,4 +1,4 @@
-# MST Monitoring Agent (Phases 8 and 13)
+# MST Monitoring Agent (Phases 8, 13 and 15)
 
 A small Python program that runs on each **authorized** lab computer. It:
 
@@ -10,6 +10,23 @@ A small Python program that runs on each **authorized** lab computer. It:
 New files are scanned on this PC (antivirus engines + static analysis) automatically or when an Admin clicks **Scan**; see *Scanning and quarantine* below. It only scans files inside its watch folders.
 
 It does **not** upload file contents, record keystrokes, capture the screen, control the computer, or hide itself. It runs as a normal visible program and writes everything it does to `mst_agent.log`.
+
+## Quick setup (Phase 15, recommended)
+
+Add PCs with an **enrollment key** instead of registering each one by hand. Step by step: [USER-GUIDE.md](../USER-GUIDE.md).
+
+1. Website: **Computers > Add Computers > Create Key**, then **Download enrollment.txt**.
+2. Copy this `agent` folder with `enrollment.txt` inside it to `C:\MST\agent` on the PC.
+3. Double-click **`setup-agent.bat`**.
+
+Each PC gets its own device ID and token and **finds the MST server on the network by itself**, also after the
+server's IP address changes. Before the agent sends its key or token to a computer it found, that computer must prove
+it is the real MST server (an HMAC of a random nonce, keyed with the hash only the server stores).
+
+Commands: `run_agent.py --enroll KEY [--server 192.168.0.61]` (enroll and write config.json) and
+`run_agent.py --find-server` (search the network now). Set `"auto_discover": false` in config.json to turn the search off.
+
+The manual way below (register-agent.php + editing config.json) still works.
 
 ## 1. On the MST server (admin laptop) — once
 
