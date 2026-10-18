@@ -217,11 +217,13 @@ final class MySQLRepository
     public static function revokeAgent(int $computerId): void { self::db()->prepare("UPDATE computers SET agent_token_hash = NULL, agent_status = 'disconnected', status = 'offline' WHERE id = ?")->execute([$computerId]); }
 
     /** Creates the computer if needed and stores a new agent token hash. @return array{0: int, 1: bool, 2: bool} [computer id, created, replaced an existing token] */
-    public static function registerAgent(string $deviceId, string $hostname, string $ipAddress, string $tokenHash): array
+    public static function registerAgent(string $deviceId, string $hostname, string $ipAddress, string $tokenHash, ?string $displayName = null): array
     {
         $existing = self::findComputerForAgent($deviceId);
         if ($existing) { self::db()->prepare('UPDATE computers SET agent_token_hash = ? WHERE id = ?')->execute([$tokenHash, $existing['id']]); return [(int)$existing['id'], false, !empty($existing['agentTokenHash'])]; }
-        self::db()->prepare("INSERT INTO computers (device_id, hostname, ip_address, operating_system, status, threat_level, last_seen, agent_status, agent_token_hash) VALUES (?, ?, ?, 'Unknown', 'offline', 'unknown', 'Never', 'disconnected', ?)")->execute([$deviceId, $hostname, $ipAddress, $tokenHash]);
+        // One INSERT: a failure never leaves a half-registered computer behind.
+        if ($displayName !== null) self::db()->prepare("INSERT INTO computers (device_id, hostname, display_name, ip_address, operating_system, status, threat_level, last_seen, agent_status, agent_token_hash) VALUES (?, ?, ?, ?, 'Unknown', 'offline', 'unknown', 'Never', 'disconnected', ?)")->execute([$deviceId, $hostname, $displayName, $ipAddress, $tokenHash]);
+        else self::db()->prepare("INSERT INTO computers (device_id, hostname, ip_address, operating_system, status, threat_level, last_seen, agent_status, agent_token_hash) VALUES (?, ?, ?, 'Unknown', 'offline', 'unknown', 'Never', 'disconnected', ?)")->execute([$deviceId, $hostname, $ipAddress, $tokenHash]);
         return [(int)self::db()->lastInsertId(), true, false];
     }
 

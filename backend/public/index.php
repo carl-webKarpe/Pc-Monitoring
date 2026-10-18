@@ -34,7 +34,14 @@ header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 if (mst_is_https()) header('Strict-Transport-Security: max-age=31536000');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
-set_exception_handler(static function (Throwable $exception): never { error_log($exception->getMessage()); Response::error('Internal server error', 'INTERNAL_ERROR', 500); });
+set_exception_handler(static function (Throwable $exception): never {
+    error_log($exception->getMessage());
+    // Missing table (42S02) or column (42S22): the database is older than this code. Say which update to run.
+    if ($exception instanceof PDOException && in_array($exception->getCode(), ['42S02', '42S22'], true)) {
+        Response::error('The database needs an update. In MySQL Workbench run the newest files in database/migrations (for example phase15_enrollment.sql and phase15_rename.sql), then try again.', 'DATABASE_UPDATE_REQUIRED', 500);
+    }
+    Response::error('Internal server error', 'INTERNAL_ERROR', 500);
+});
 
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';

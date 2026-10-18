@@ -26,8 +26,8 @@ final class ComputerController
         if (!preg_match('/^[^\x00-\x1F\x7F<>]{1,120}$/u', $name)) Validation::fail(['name' => 'Enter a computer name (up to 120 characters, without < or >)']);
         $token = bin2hex(random_bytes(32));
         $deviceId = MySQLRepository::nextDeviceId();
-        [$computerId] = MySQLRepository::registerAgent($deviceId, $name, '0.0.0.0', hash('sha256', $token));
-        MySQLRepository::renameComputer($computerId, $name);  // keeps this name after the agent reports the real computer name
+        // display_name keeps this name after the agent reports the real Windows computer name.
+        [$computerId] = MySQLRepository::registerAgent($deviceId, $name, '0.0.0.0', hash('sha256', $token), $name);
         MySQLRepository::log((int)$user['id'], 'AGENT_REGISTERED', "Registered $name as $deviceId from the website", 'computer', (string)$computerId);
         self::tokenResponse('Computer registered. Copy the token now: it is shown only once.', $computerId, $deviceId, $token, 201);
     }
