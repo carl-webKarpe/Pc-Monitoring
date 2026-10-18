@@ -7,10 +7,13 @@ import logging
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 from . import VERSION
 from .api_client import ApiClient, ApiError
 from .config import AgentConfig
+from .config_store import update_config
+from .discovery import find_server
 from .file_monitor import FileMonitor
 from .antivirus import engines_status
 from .outbox import Outbox
@@ -22,6 +25,8 @@ log = logging.getLogger("mst_agent")
 
 BATCH_SIZE = 100
 ENGINE_REFRESH_SECONDS = 3600  # re-check which antivirus engines are available (Defender can be switched on/off)
+DISCOVERY_AFTER_FAILURES = 3   # heartbeats in a row that could not reach the server before searching the network
+DISCOVERY_INTERVAL_SECONDS = 300
 
 
 class Agent:
@@ -37,6 +42,8 @@ class Agent:
         self.quarantine = Quarantine(config.quarantine_folder, config.watch_folders, config.max_hash_bytes)
         self._engines: list[dict] | None = None
         self._engines_checked = 0.0
+        self._failed_heartbeats = 0
+        self._last_discovery = 0.0
 
     def engines(self) -> list[dict]:
         """Antivirus engines installed on this PC (checked at start and then hourly)."""
@@ -157,8 +164,39 @@ class Agent:
             self.client.heartbeat(payload)
         except ApiError as error:
             self._report_connection(False, error)
+            if error.status is None:  # no answer at all (not a refusal): the server may have a new address
+                self._failed_heartbeats += 1
             return False
+        self._failed_heartbeats = 0
         self._report_connection(True)
+        return True
+
+    def rediscover(self, force: bool = False) -> bool:
+        """When the server stopped answering (e.g. the laptop got a new IP address), searches the local network for
+        it and saves the new address in config.json. Returns True when the server address was updated."""
+        if not self.config.auto_discover or self.offline:
+            return False
+        due = self._failed_heartbeats >= DISCOVERY_AFTER_FAILURES and time.monotonic() - self._last_discovery > DISCOVERY_INTERVAL_SECONDS
+        if not (force or due):
+            return False
+        self._last_discovery = time.monotonic()
+        current = urlparse(self.config.server_url)
+        log.info("MST server %s is not answering; searching this network for it", self.config.server_url)
+        found = find_server(self.config.device_token, self.config.device_id, port=current.port or (443 if current.scheme == "https" else 80),
+                            scheme=current.scheme, hints=(current.hostname or "",), verify=self.client.session.verify)
+        if found is None:
+            log.warning("MST server not found on this network; will try again in %d minutes", DISCOVERY_INTERVAL_SECONDS // 60)
+            return False
+        if found.rstrip("/") == self.config.server_url.rstrip("/"):
+            return False
+        log.info("MST server found at %s (was %s)", found, self.config.server_url)
+        self.config.server_url = found
+        self._server_reachable = None
+        if self.config.config_path is not None:
+            try:
+                update_config(self.config.config_path, {"server_url": found})
+            except OSError as error:
+                log.warning("Could not save the new server address in config.json: %s", error)
         return True
 
     def _report_connection(self, ok: bool, error: ApiError | None = None) -> None:
@@ -194,7 +232,8 @@ class Agent:
     def _heartbeat_loop(self) -> None:
         while not self._stop.is_set():
             try:
-                self.send_heartbeat()
+                if not self.send_heartbeat() and self.rediscover():
+                    self.send_heartbeat()
             except Exception:
                 log.exception("Heartbeat failed")
             self._stop.wait(self.config.heartbeat_interval_seconds)

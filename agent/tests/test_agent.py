@@ -465,3 +465,88 @@ def test_only_one_agent_can_run_at_a_time(tmp_path):
     second = SingleInstance(tmp_path / "mst_agent.lock")
     second.acquire()  # free again once the first agent has stopped
     second.release()
+
+
+# ---- Phase 15: enrollment and finding the server ------------------------------------------------------------
+from mst_agent import discovery, enroll as enroll_module  # noqa: E402
+from mst_agent.config_store import read_json  # noqa: E402
+
+
+def test_enrollment_keys_and_server_addresses_are_normalized():
+    assert discovery.normalize_key("q7uw-fyz4 bdtz-ux2u") == "Q7UWFYZ4BDTZUX2U"
+    assert discovery.normalize_key("Q7UW-FYZ4-BDTZ-UX20") is None  # 0 is not in the key alphabet
+    assert discovery.normalize_key("short") is None
+    assert discovery.normalize_server("192.168.0.61") == "http://192.168.0.61:8081/api"
+    assert discovery.normalize_server("192.168.0.61:9000") == "http://192.168.0.61:9000/api"
+    assert discovery.normalize_server("http://192.168.0.61:8081/api/") == "http://192.168.0.61:8081/api"
+
+
+def test_proof_matches_the_php_server():
+    # php -r 'echo hash_hmac("sha256", "00112233445566778899aabbccddeeff", hash("sha256", "Q7UWFYZ4BDTZUX2U"));'
+    assert discovery.proof("Q7UWFYZ4BDTZUX2U", "00112233445566778899aabbccddeeff") == "350713f8d772c09f2997aa0cccc9f49cc0ed88e23f46a1dc96976291a60dec9e"
+
+
+class IdentifyResponse:
+    def __init__(self, data):
+        self._data = data
+
+    def json(self):
+        return {"success": True, "data": self._data}
+
+
+def test_only_a_server_that_knows_the_secret_is_accepted(monkeypatch):
+    def real_server(url, json, **kwargs):
+        return IdentifyResponse({"service": "MST", "proofs": ["0" * 64, discovery.proof(TOKEN, json["nonce"])]})
+
+    def impostor(url, json, **kwargs):  # answers like MST but cannot compute the proof
+        return IdentifyResponse({"service": "MST", "proofs": [discovery.proof("someone-else", json["nonce"])]})
+
+    monkeypatch.setattr(discovery.requests, "post", real_server)
+    assert discovery.verify_server("http://10.0.0.5:8081/api", TOKEN, "MST-PC-002")
+    monkeypatch.setattr(discovery.requests, "post", impostor)
+    assert not discovery.verify_server("http://10.0.0.6:8081/api", TOKEN, "MST-PC-002")
+
+
+def test_find_server_checks_open_ports_then_the_proof(monkeypatch):
+    monkeypatch.setattr(discovery, "local_networks", lambda: [discovery.ipaddress.IPv4Network("10.1.2.0/29")])
+    monkeypatch.setattr(discovery, "_port_open", lambda host, port, timeout: host in ("10.1.2.3", "10.1.2.5"))
+    monkeypatch.setattr(discovery, "verify_server", lambda url, *args, **kwargs: url == "http://10.1.2.5:8081/api")
+    assert discovery.find_server(TOKEN, "MST-PC-002") == "http://10.1.2.5:8081/api"
+    monkeypatch.setattr(discovery, "verify_server", lambda *args, **kwargs: False)
+    assert discovery.find_server(TOKEN, "MST-PC-002") is None
+
+
+class EnrollResponse:
+    status_code = 201
+
+    def json(self):
+        return {"success": True, "data": {"deviceId": "MST-PC-007", "deviceToken": "b" * 64, "reused": False}}
+
+
+def test_enroll_writes_config_from_the_example(tmp_path, monkeypatch):
+    example = tmp_path / "config.example.json"
+    example.write_text(json.dumps({"server_url": "http://x", "device_id": "MST-PC-002", "device_token": "PASTE", "watch_folders": ["{Downloads}"]}))
+    sent = {}
+    monkeypatch.setattr(enroll_module, "heartbeat_payload", lambda url: {"hostname": "LAB-PC-07", "macAddress": "AA:BB:CC:DD:EE:07", "operatingSystem": "Windows 11"})
+    monkeypatch.setattr(enroll_module.requests, "post", lambda url, json, **kwargs: sent.update(url=url, body=json) or EnrollResponse())
+    result = enroll_module.enroll("abcd-efgh-jkmn-pqrs", tmp_path / "config.json", example, server="192.168.0.61", data_dir="%LOCALAPPDATA%\\MST-Agent")
+    assert result == {"serverUrl": "http://192.168.0.61:8081/api", "deviceId": "MST-PC-007", "reused": False}
+    assert sent["url"] == "http://192.168.0.61:8081/api/agent/enroll" and sent["body"]["key"] == "ABCDEFGHJKMNPQRS"
+    config = read_json(tmp_path / "config.json")
+    assert config["device_id"] == "MST-PC-007" and config["device_token"] == "b" * 64 and config["watch_folders"] == ["{Downloads}"]
+    assert config["queue_file"] == "%LOCALAPPDATA%\\MST-Agent\\mst_agent_queue.db"
+    with pytest.raises(enroll_module.EnrollError):
+        enroll_module.enroll("not-a-key", tmp_path / "config.json", example, server="192.168.0.61")
+
+
+def test_agent_saves_the_new_server_address_after_finding_it(tmp_path, monkeypatch):
+    from mst_agent import agent as agent_module
+    path = write_config(tmp_path)
+    (tmp_path / "watched").mkdir(exist_ok=True)
+    agent = agent_module.Agent(load_config(path))
+    agent._failed_heartbeats = 3
+    monkeypatch.setattr(agent_module, "find_server", lambda *args, **kwargs: "http://10.9.8.7:8081/api")
+    assert agent.rediscover()
+    assert agent.config.server_url == "http://10.9.8.7:8081/api"
+    assert read_json(path)["server_url"] == "http://10.9.8.7:8081/api"
+    agent.outbox.close()

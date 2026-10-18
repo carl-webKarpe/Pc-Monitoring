@@ -6,6 +6,8 @@ require_once __DIR__ . '/../helpers/Validation.php';
 require_once __DIR__ . '/../middleware/AgentAuth.php';
 require_once __DIR__ . '/../repositories/MySQLRepository.php';
 require_once __DIR__ . '/../services/ScanService.php';
+require_once __DIR__ . '/../helpers/Security.php';
+require_once __DIR__ . '/EnrollmentController.php';
 
 // Endpoints used by the Python monitoring agent on each lab PC (device-token authentication, no user session).
 final class AgentController
@@ -17,12 +19,63 @@ final class AgentController
     {
         if ($method !== 'POST') Response::error('Method not allowed', 'METHOD_NOT_ALLOWED', 405);
         if ((int)($_SERVER['CONTENT_LENGTH'] ?? 0) > self::MAX_BODY_BYTES) Response::error('Request too large', 'PAYLOAD_TOO_LARGE', 413);
+        // No device token yet: enroll (with an enrollment key) and identify (lets an agent recognise this server on the LAN).
+        if ($action === 'enroll') self::enroll();
+        if ($action === 'identify') self::identify();
         if ($action === 'heartbeat') self::heartbeat();
         if ($action === 'events') self::events();
         if ($action === 'scan-jobs') self::scanJobs();
         if ($action === 'scan-results') self::scanResult();
         if ($action === 'action-results') self::actionResult();
         Response::error('Endpoint not found', 'NOT_FOUND', 404);
+    }
+
+    private const ENROLL_FAILURE_LIMIT = 10;  // wrong keys per IP address per 15 minutes
+
+    /** A lab PC adds itself with an enrollment key from Computers > Add Computers and receives its own device token. */
+    private static function enroll(): never
+    {
+        $data = Validation::body();
+        $ip = Security::clientIp();
+        if (MySQLRepository::recentEnrollmentFailures($ip, 15) >= self::ENROLL_FAILURE_LIMIT) Response::error('Too many wrong enrollment keys from this computer. Try again in 15 minutes.', 'ENROLLMENT_LOCKED', 429);
+        $text = static function (string $field, int $max, bool $required = true) use ($data): ?string {
+            $value = $data[$field] ?? null;
+            if (!is_string($value) || trim($value) === '') { if ($required) Validation::fail([$field => "$field is required"]); return null; }
+            if (!preg_match('/^.{1,' . $max . '}$/us', $value) || preg_match('/[\x00-\x1F\x7F<>]/', $value)) Validation::fail([$field => "$field is invalid"]);
+            return trim($value);
+        };
+        $hostname = $text('hostname', 120);
+        $operatingSystem = $text('operatingSystem', 80) ?? 'Unknown';
+        $mac = $text('macAddress', 17, false);
+        if ($mac !== null && !preg_match('/^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/', strtoupper($mac))) Validation::fail(['macAddress' => 'macAddress is invalid']);
+        $key = EnrollmentController::normalize($data['key'] ?? null);
+        $token = bin2hex(random_bytes(32));
+        $result = $key === null ? null : MySQLRepository::enrollComputer(hash('sha256', $key), $hostname, $mac !== null ? strtoupper($mac) : null, $operatingSystem, $ip ?? '0.0.0.0', hash('sha256', $token));
+        if ($result === null) {
+            MySQLRepository::log(null, 'ENROLLMENT_FAILED', "Enrollment refused for $hostname: key invalid, expired, used up or revoked", 'computer', null);
+            Response::error('The enrollment key is wrong, expired, used up or revoked. Create a new one on Computers > Add Computers.', 'ENROLLMENT_INVALID', 403);
+        }
+        MySQLRepository::log(null, $result['reused'] ? 'AGENT_REENROLLED' : 'AGENT_ENROLLED', ($result['reused'] ? 'Enrolled again (new token): ' : 'Enrolled ') . "$hostname as {$result['deviceId']} with key \"{$result['keyLabel']}\"", 'computer', (string)$result['computerId']);
+        Response::success('Computer enrolled', ['deviceId' => $result['deviceId'], 'deviceToken' => $token, 'reused' => $result['reused']], 201);
+    }
+
+    /**
+     * Proves that this is the real MST server without revealing any secret: for a random nonce from the agent it returns
+     * HMAC-SHA256(nonce) keyed with the stored hash of that device's token and of each usable enrollment key. Only a
+     * server that holds those hashes can answer; the agent checks the proof before it sends its token or key.
+     */
+    private static function identify(): never
+    {
+        $data = Validation::body();
+        $nonce = $data['nonce'] ?? null;
+        if (!is_string($nonce) || !preg_match('/^[0-9a-f]{32,128}$/', $nonce)) Validation::fail(['nonce' => 'nonce must be 32-128 hex characters']);
+        $hashes = MySQLRepository::activeEnrollmentKeyHashes();
+        $deviceId = $data['deviceId'] ?? null;
+        if (is_string($deviceId) && preg_match('/^[A-Za-z0-9._-]{3,40}$/', $deviceId)) {
+            $computer = MySQLRepository::findComputerForAgent($deviceId);
+            if (!empty($computer['agentTokenHash'])) $hashes[] = $computer['agentTokenHash'];
+        }
+        Response::success('MST server', ['service' => 'MST', 'proofs' => array_map(static fn(string $hash) => hash_hmac('sha256', $nonce, $hash), $hashes)]);
     }
 
     private static function heartbeat(): never

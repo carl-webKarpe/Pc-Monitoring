@@ -212,6 +212,83 @@ final class MySQLRepository
         return [(int)self::db()->lastInsertId(), true, false];
     }
 
+    // ---- Enrollment keys: add many lab PCs with one key (Phase 15) -------------------------------------------
+
+    private const ENROLLMENT_ACTIVE = 'k.revoked_at IS NULL AND k.expires_at > NOW() AND k.uses < k.max_uses';
+
+    public static function recentEnrollmentFailures(?string $ip, int $minutes): int
+    {
+        if ($ip === null) return 0;
+        $statement = self::db()->prepare("SELECT COUNT(*) FROM activity_logs WHERE action = 'ENROLLMENT_FAILED' AND ip_address = ? AND created_at > NOW() - INTERVAL ? MINUTE");
+        $statement->execute([$ip, $minutes]);
+        return (int)$statement->fetchColumn();
+    }
+
+    public static function createEnrollmentKey(string $keyHash, string $label, int $maxUses, int $hours, int $userId): int
+    {
+        self::db()->prepare('INSERT INTO agent_enrollment_keys (key_hash, label, max_uses, expires_at, created_by) VALUES (?, ?, ?, NOW() + INTERVAL ? HOUR, ?)')->execute([$keyHash, $label, $maxUses, $hours, $userId]);
+        return (int)self::db()->lastInsertId();
+    }
+
+    /** Recent keys for the Add Computers window (never the hash). */
+    public static function listEnrollmentKeys(int $limit = 20): array
+    {
+        $rows = self::fetchAll('SELECT k.id, k.label, k.max_uses, k.uses, k.expires_at, k.created_at, k.last_used_at, k.revoked_at, u.username AS created_by_username,
+            (' . self::ENROLLMENT_ACTIVE . ') AS active FROM agent_enrollment_keys k LEFT JOIN users u ON u.id = k.created_by ORDER BY k.id DESC LIMIT ' . max(1, $limit));
+        return array_map(static fn(array $row) => ['active' => (bool)$row['active']] + $row, $rows);
+    }
+
+    public static function findEnrollmentKey(int $id): ?array { $row = self::fetchOne('SELECT k.id, k.label, k.max_uses, k.uses, k.expires_at, k.revoked_at, (' . self::ENROLLMENT_ACTIVE . ') AS active FROM agent_enrollment_keys k WHERE k.id = ?', [$id]); return $row ? ['active' => (bool)$row['active']] + $row : null; }
+
+    public static function revokeEnrollmentKey(int $id): bool
+    {
+        $statement = self::db()->prepare('UPDATE agent_enrollment_keys SET revoked_at = NOW() WHERE id = ? AND revoked_at IS NULL');
+        $statement->execute([$id]);
+        return $statement->rowCount() === 1;
+    }
+
+    /** Hashes of the keys that can still enroll a PC (used to prove this server's identity to agents searching the LAN). */
+    public static function activeEnrollmentKeyHashes(): array
+    {
+        return self::db()->query('SELECT k.key_hash FROM agent_enrollment_keys k WHERE ' . self::ENROLLMENT_ACTIVE . ' ORDER BY k.id DESC LIMIT 20')->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    /**
+     * Uses one enrollment of the key and gives the PC its own device ID and token hash. A PC that enrolls again
+     * (same computer name and network adapter, e.g. after reinstalling) keeps its device ID and gets a new token.
+     * @return array{computerId: int, deviceId: string, reused: bool, keyId: int, keyLabel: string}|null null = key not usable
+     */
+    public static function enrollComputer(string $keyHash, string $hostname, ?string $macAddress, string $operatingSystem, string $ipAddress, string $tokenHash): ?array
+    {
+        $db = self::db();
+        $db->beginTransaction();
+        try {
+            $statement = $db->prepare('SELECT k.id, k.label FROM agent_enrollment_keys k WHERE k.key_hash = ? AND ' . self::ENROLLMENT_ACTIVE . ' FOR UPDATE');
+            $statement->execute([$keyHash]);
+            $key = $statement->fetch();
+            if (!$key) { $db->rollBack(); return null; }
+            $existing = null;
+            if ($macAddress !== null) {
+                $statement = $db->prepare('SELECT id, device_id FROM computers WHERE mac_address = ? AND hostname = ? ORDER BY id LIMIT 1');
+                $statement->execute([$macAddress, $hostname]);
+                $existing = $statement->fetch() ?: null;
+            }
+            if ($existing) {
+                $db->prepare("UPDATE computers SET agent_token_hash = ?, ip_address = ?, operating_system = ? WHERE id = ?")->execute([$tokenHash, $ipAddress, $operatingSystem, $existing['id']]);
+                [$computerId, $deviceId] = [(int)$existing['id'], (string)$existing['device_id']];
+            } else {
+                $next = (int)$db->query("SELECT COALESCE(MAX(CAST(SUBSTRING(device_id, 8) AS UNSIGNED)), 0) + 1 FROM computers WHERE device_id REGEXP '^MST-PC-[0-9]+$'")->fetchColumn();
+                $deviceId = sprintf('MST-PC-%03d', $next);
+                $db->prepare("INSERT INTO computers (device_id, hostname, ip_address, operating_system, status, threat_level, last_seen, agent_status, mac_address, agent_token_hash) VALUES (?, ?, ?, ?, 'offline', 'unknown', 'Never', 'disconnected', ?, ?)")
+                    ->execute([$deviceId, $hostname, $ipAddress, $operatingSystem, $macAddress, $tokenHash]);
+                $computerId = (int)$db->lastInsertId();
+            }
+            $db->prepare('UPDATE agent_enrollment_keys SET uses = uses + 1, last_used_at = NOW() WHERE id = ?')->execute([$key['id']]);
+            $db->commit();
+        } catch (Throwable $exception) { $db->rollBack(); throw $exception; }
+        return ['computerId' => $computerId, 'deviceId' => $deviceId, 'reused' => $existing !== null, 'keyId' => (int)$key['id'], 'keyLabel' => (string)$key['label']];
+    }
+
     // ---- Detected files, scans and quarantine (Phase 11 + Phase 13) --------------------------------------
 
     public static function findFileEvent(int $id): ?array { return self::fetchOne(self::FILE_EVENT_SELECT . ' WHERE f.id = ?', [$id]); }
@@ -459,5 +536,5 @@ final class MySQLRepository
         return $statement->rowCount() === 1;
     }
 
-    public static function tableAccessible(string $table): bool { if (!in_array($table, ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events', 'hash_blocklist', 'hash_reputation', 'quarantine_items', 'trusted_devices', 'phone_requests'], true)) return false; self::db()->query("SELECT 1 FROM `$table` LIMIT 1")->fetchAll(); return true; }
+    public static function tableAccessible(string $table): bool { if (!in_array($table, ['users', 'computers', 'threats', 'scans', 'activity_logs', 'permissions', 'settings', 'file_events', 'hash_blocklist', 'hash_reputation', 'quarantine_items', 'trusted_devices', 'phone_requests', 'agent_enrollment_keys'], true)) return false; self::db()->query("SELECT 1 FROM `$table` LIMIT 1")->fetchAll(); return true; }
 }

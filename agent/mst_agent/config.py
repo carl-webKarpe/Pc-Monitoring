@@ -39,6 +39,8 @@ class AgentConfig:
     clamav_database: str = ""          # optional signature folder for clamscan (--database)
     scan_timeout_seconds: int = 120
     quarantine_folder: Path = Path("quarantine")
+    auto_discover: bool = True         # search the local network for the MST server when its address changes
+    config_path: Path | None = None    # where this configuration was loaded from (updated after auto-discovery)
 
     @property
     def max_hash_bytes(self) -> int:
@@ -94,7 +96,7 @@ def load_config(path: str | Path, require_token: bool = True) -> AgentConfig:
 
     device_token = str(raw.get("device_token", ""))
     if require_token and (len(device_token) < 32 or "PASTE" in device_token):
-        errors.append("device_token is missing: run backend/tools/register-agent.php on the MST server and paste the token")
+        errors.append("device_token is missing: enroll this PC with an enrollment key (setup.bat, or: run_agent.py --enroll KEY)")
 
     folders = [_watch_folder(str(folder), base) for folder in raw.get("watch_folders", [])]
     if not folders:
@@ -128,6 +130,8 @@ def load_config(path: str | Path, require_token: bool = True) -> AgentConfig:
         clamav_database=str(raw.get("clamav_database", "")),
         scan_timeout_seconds=positive_int("scan_timeout_seconds", 120, 10),
         quarantine_folder=_expand(str(raw.get("quarantine_folder") or "quarantine"), base),
+        auto_discover=bool(raw.get("auto_discover", True)),
+        config_path=config_path,
     )
     if config.antivirus not in ("auto", "defender", "clamav", "none"):
         errors.append("antivirus must be auto, defender, clamav or none")

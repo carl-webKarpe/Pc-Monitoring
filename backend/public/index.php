@@ -20,6 +20,7 @@ require_once __DIR__ . '/../controllers/AgentController.php';
 require_once __DIR__ . '/../controllers/FileEventController.php';
 require_once __DIR__ . '/../controllers/QuarantineController.php';
 require_once __DIR__ . '/../controllers/PhoneAuthController.php';
+require_once __DIR__ . '/../controllers/EnrollmentController.php';
 
 ini_set('display_errors', '0');
 mst_apply_cors();
@@ -39,7 +40,7 @@ $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $path = preg_replace('#^/api/?#', '', $path);
 $segments = array_map('rawurldecode', array_values(array_filter(explode('/', trim($path, '/')), 'strlen')));
-if ($segments === []) Response::success('MST API', ['version' => '0.13.0', 'status' => 'ok']);
+if ($segments === []) Response::success('MST API', ['version' => '0.15.0', 'status' => 'ok']);
 
 $resource = $segments[0] ?? '';
 $id = $segments[1] ?? null;
@@ -63,6 +64,7 @@ if ($resource === 'file-events') FileEventController::index($method, $id, $actio
 if ($resource === 'users') UserController::index($method, $id);
 if ($resource === 'admins') AdminController::index($method, $id);
 if ($resource === 'computers') ComputerController::index($method, $id);
+if ($resource === 'enrollment' && $action === null) EnrollmentController::index($method, $id);
 if ($resource === 'threats') ThreatController::index($method, $id, $action);
 if ($resource === 'scans') ScanController::index($method, $id, $action);
 if ($resource === 'quarantine') QuarantineController::index($method, $id, $action);
