@@ -10,19 +10,28 @@ echo  MST Monitoring Agent - setup for this PC
 echo ============================================================
 echo.
 
-rem 1. Python
+rem 1. Python: use the first one that really runs (a half-removed Python can still be listed by "py").
 set PYTHON=
-where py >nul 2>nul && set PYTHON=py -3
-if not defined PYTHON where python >nul 2>nul && set PYTHON=python
+for %%v in ("py -3.13" "py -3.12" "py -3.11" "py -3.14" "py -3" "python") do (
+  if not defined PYTHON (
+    %%~v -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>nul && set "PYTHON=%%~v"
+  )
+)
 if not defined PYTHON (
-  echo Python is not installed on this PC.
-  echo Install Python 3 from https://www.python.org/downloads/ and tick "Add python.exe to PATH",
-  echo then double-click setup-agent.bat again.
+  echo No working Python 3.10 or newer was found on this PC.
+  echo Install Python 3.13 ^(64-bit^) from https://www.python.org/downloads/windows/ and tick "Add python.exe to PATH".
+  echo If Python is listed but broken, run in PowerShell:  py list   then remove the broken version and install 3.13.
+  echo Then double-click setup-agent.bat again.
   pause
   exit /b 1
 )
+echo Using Python: %PYTHON%
 
 rem 2. Python environment and packages (offline from the "wheels" folder when it exists)
+rem A .venv made with a Python that was removed later no longer works: make it again.
+if exist ".venv\Scripts\python.exe" (
+  ".venv\Scripts\python.exe" -c "import sys" >nul 2>nul || rmdir /s /q .venv
+)
 if not exist ".venv\Scripts\python.exe" (
   echo [1/3] Creating the Python environment...
   %PYTHON% -m venv .venv || (echo Could not create the Python environment. & pause & exit /b 1)
