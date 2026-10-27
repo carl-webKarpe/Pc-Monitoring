@@ -8,9 +8,16 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .folders import onedrive_fallback, resolve_known_folder
+from .folders import onedrive_fallback, other_fixed_drives, resolve_known_folder, user_profile
 
 DEVICE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{3,40}$")
+
+# Folders whose changes are Windows/program noise, not people's files. Matched by name anywhere below a watched folder.
+DEFAULT_IGNORE_FOLDERS = [
+    "AppData", "$Recycle.Bin", "System Volume Information", "Windows", "Program Files", "Program Files (x86)",
+    "ProgramData", "Recovery", "PerfLogs", "$WinREAgent", "MSOCache", "Temp", "tmp", "node_modules", ".git",
+    ".venv", "venv", "__pycache__", ".cache", ".vscode", ".idea", "IntelGraphicsProfiles", "MicrosoftEdgeBackups",
+]
 
 
 class ConfigError(ValueError):
@@ -39,6 +46,10 @@ class AgentConfig:
     clamav_database: str = ""          # optional signature folder for clamscan (--database)
     scan_timeout_seconds: int = 120
     quarantine_folder: Path = Path("quarantine")
+    watch_removable_drives: bool = False  # {RemovableDrives}: USB drives are watched while they are plugged in
+    watch_recycle_bin: bool = True        # report deletes to the Recycle Bin from any folder (File Explorer's Delete)
+    ignore_folders: set[str] = field(default_factory=lambda: {name.lower() for name in DEFAULT_IGNORE_FOLDERS})
+    recycle_bin_folders: list[Path] = field(default_factory=list)  # empty = this user's Recycle Bin on every drive
     auto_discover: bool = True         # search the local network for the MST server when its address changes
     config_path: Path | None = None    # where this configuration was loaded from (updated after auto-discovery)
 
@@ -98,8 +109,26 @@ def load_config(path: str | Path, require_token: bool = True) -> AgentConfig:
     if require_token and (len(device_token) < 32 or "PASTE" in device_token):
         errors.append("device_token is missing: enroll this PC with an enrollment key (setup.bat, or: run_agent.py --enroll KEY)")
 
-    folders = [_watch_folder(str(folder), base) for folder in raw.get("watch_folders", [])]
-    if not folders:
+    folders: list[Path] = []
+    watch_removable = False
+    for value in [str(folder) for folder in raw.get("watch_folders", [])]:
+        token = value.strip().lower()
+        if token == "{userprofile}":
+            folders.append(user_profile())          # the whole user folder (AppData and other noise is ignored)
+        elif token == "{otherdrives}":
+            folders.extend(other_fixed_drives())    # D:, E:, ... (not the Windows drive)
+        elif token == "{removabledrives}":
+            watch_removable = True                  # USB drives, while plugged in
+        else:
+            folders.append(_watch_folder(value, base))
+    # A folder inside another watched folder would report every event twice.
+    unique: list[Path] = []
+    for index, folder in enumerate(folders):
+        inside_other = any(folder != other and _inside(folder, other) for other in folders)
+        if not inside_other and folder not in folders[:index]:
+            unique.append(folder)
+    folders = unique
+    if not folders and not watch_removable:
         errors.append("watch_folders must list at least one folder")
 
     def positive_int(key: str, default: int, minimum: int = 1) -> int:
@@ -130,12 +159,23 @@ def load_config(path: str | Path, require_token: bool = True) -> AgentConfig:
         clamav_database=str(raw.get("clamav_database", "")),
         scan_timeout_seconds=positive_int("scan_timeout_seconds", 120, 10),
         quarantine_folder=_expand(str(raw.get("quarantine_folder") or "quarantine"), base),
+        watch_removable_drives=watch_removable,
+        watch_recycle_bin=bool(raw.get("watch_recycle_bin", True)),
+        ignore_folders={str(name).lower() for name in raw.get("ignore_folders", DEFAULT_IGNORE_FOLDERS)},
+        recycle_bin_folders=[_expand(str(folder), base) for folder in raw.get("recycle_bin_folders", [])],
         auto_discover=bool(raw.get("auto_discover", True)),
         config_path=config_path,
     )
     if config.antivirus not in ("auto", "defender", "clamav", "none"):
         errors.append("antivirus must be auto, defender, clamav or none")
-    if any(_inside(config.quarantine_folder, folder) for folder in config.watch_folders):
+    def ignored_inside(path: Path, folder: Path) -> bool:
+        try:
+            parts = path.resolve().relative_to(folder.resolve()).parts
+        except (ValueError, OSError):
+            return False
+        return any(part.lower() in config.ignore_folders for part in parts)
+
+    if any(_inside(config.quarantine_folder, folder) and not ignored_inside(config.quarantine_folder, folder) for folder in config.watch_folders):
         errors.append("quarantine_folder must not be inside a watch folder")
     if config.tls_ca_bundle is not None and not config.tls_ca_bundle.is_file():
         errors.append(f"tls_ca_bundle file not found: {config.tls_ca_bundle}")

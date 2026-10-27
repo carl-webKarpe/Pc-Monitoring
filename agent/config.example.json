@@ -5,9 +5,35 @@
   "heartbeat_interval_seconds": 30,
   "send_interval_seconds": 5,
   "watch_folders": [
-    "{Downloads}",
-    "{Desktop}",
-    "{Documents}"
+    "{UserProfile}",
+    "{OtherDrives}",
+    "{RemovableDrives}"
+  ],
+  "watch_recycle_bin": true,
+  "ignore_folders": [
+    "AppData",
+    "$Recycle.Bin",
+    "System Volume Information",
+    "Windows",
+    "Program Files",
+    "Program Files (x86)",
+    "ProgramData",
+    "Recovery",
+    "PerfLogs",
+    "$WinREAgent",
+    "MSOCache",
+    "Temp",
+    "tmp",
+    "node_modules",
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".cache",
+    ".vscode",
+    ".idea",
+    "IntelGraphicsProfiles",
+    "MicrosoftEdgeBackups"
   ],
   "recursive": true,
   "ignore_extensions": [
@@ -24,7 +50,12 @@
   "ignore_name_prefixes": [
     "~$",
     ".~",
-    "~WRL"
+    "~WRL",
+    "NTUSER",
+    "ntuser",
+    "UsrClass",
+    "Thumbs.db",
+    "desktop.ini"
   ],
   "max_hash_size_mb": 200,
   "queue_file": "mst_agent_queue.db",

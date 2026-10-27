@@ -59,3 +59,44 @@ def onedrive_fallback(path: Path) -> Path | None:
         if root and (Path(root) / relative).is_dir():
             return Path(root) / relative
     return None
+
+
+# ---- whole user profile and drives (Phase 16) --------------------------------------------------------------
+
+def user_profile() -> Path:
+    return Path(os.environ.get("USERPROFILE") or str(Path.home()))
+
+
+def system_drive() -> str:
+    """'C:' on most PCs."""
+    return (os.environ.get("SystemDrive") or "C:").upper()
+
+
+def _drives(kind: str) -> list[Path]:
+    """Drive roots of one kind on Windows: 'fixed' (internal disks) or 'removable' (USB drives, memory cards)."""
+    if os.name != "nt":
+        return []
+    try:
+        import psutil
+        partitions = psutil.disk_partitions(all=False)
+    except Exception:
+        return []
+    roots = []
+    for partition in partitions:
+        options = {option.strip().lower() for option in partition.opts.split(",")}
+        if kind in options and partition.mountpoint:
+            roots.append(Path(partition.mountpoint))
+    return roots
+
+
+def fixed_drives() -> list[Path]:
+    return _drives("fixed")
+
+
+def other_fixed_drives() -> list[Path]:
+    """Internal drives except the Windows drive (e.g. D:\\), watched whole."""
+    return [drive for drive in fixed_drives() if str(drive).rstrip("\\/").upper() != system_drive()]
+
+
+def removable_drives() -> list[Path]:
+    return _drives("removable")

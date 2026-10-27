@@ -117,6 +117,44 @@ computer name and network adapter) keeps its device ID.
 
 ---
 
+## Part 7: Deleted files (File Explorer, Recycle Bin, USB drives)
+
+With agent **1.3** or newer, every deletion shows **which PC**, **which file** (full original path) and **when**:
+
+| What you see on Detected Files | What happened on the PC |
+| --- | --- |
+| **DELETED · Moved to Recycle Bin** | Deleted with File Explorer (Delete key). Reported from **any folder** on the drive, with the real delete time. Folders show **(folder)**. |
+| **DELETED · Deleted permanently** | Deleted without the Recycle Bin: Shift+Delete, a USB drive, a program or the command line. |
+| **DELETED · Removed from Recycle Bin** | The Recycle Bin was emptied (or the item was deleted there): it is now permanently gone. |
+
+Restoring a file from the Recycle Bin is not a deletion and is not reported as one. Items moved to the Recycle Bin
+while the agent was not running are reported when it starts again, with their real delete time.
+
+Use **Activity** on Detected Files to show only one kind (for example **Deleted permanently**). **View** shows
+**How It Was Deleted** and **Deleted At**.
+
+**Watching more of the PC.** New config.json files (from Register Computer) watch:
+`{UserProfile}` (the whole user folder), `{OtherDrives}` (D:, E:, ... except the Windows drive) and
+`{RemovableDrives}` (USB drives while plugged in). Windows and program folders that change all the time (AppData,
+Temp, Program Files, .git, ...) are ignored; the list is `ignore_folders` in config.json.
+
+**Updating a PC that already runs the agent:**
+
+1. Copy the new `mst_agent` folder (and `config.example.json`) over the old ones in `C:\MST\agent`. Keep the PC's own `config.json`.
+2. Recycle Bin and permanent-delete detection then work right away.
+3. To also watch the whole user folder, other drives and USB drives, open `config.json` and change the
+   `watch_folders` lines to:
+
+   ```json
+   "watch_folders": ["{UserProfile}", "{OtherDrives}", "{RemovableDrives}"],
+   ```
+4. Restart the agent (close its window and run `start-agent.bat`, or sign out and in).
+
+What MST cannot see: a permanent delete (Shift+Delete) that happened while the agent was not running, and which program
+or Windows user deleted a file (that needs Windows auditing, a possible later "precise mode").
+
+---
+
 ## Problems
 
 | What you see | What to do |

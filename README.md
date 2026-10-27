@@ -225,6 +225,19 @@ Login lockout, idle session timeout, CSRF protection, strong passwords, security
 
 Real scanning with antivirus engines (Microsoft Defender, built into Windows, and/or ClamAV) on the lab PCs and on the MST server, VirusTotal, the hash blocklist and static file analysis. Five honest risk levels (**Safe, Medium, High, Unknown, Failed**) with an evidence-strength rating instead of invented percentages; a full Scan History table (search, filters, sorting, paging, CSV and report export); real uploads on the File Scanner page; automatic scans of new files; quarantine / release / delete on lab PCs; investigations; a dashboard built only from database data. Setup, rules and testing: **[SCANNER.md](SCANNER.md)**. Existing databases: run `database/migrations/phase13_scanner.sql` once after `phase12_security.sql`.
 
+## Phase 16 - Deleted files: Recycle Bin, permanent deletes, more of the PC
+
+Agent 1.3 reports **how** a file was deleted (`file_events.delete_mode`): **Moved to Recycle Bin** (File Explorer's
+Delete key, from any folder on the drive, read from Windows' Recycle Bin record with the original path and the real
+delete time), **Deleted permanently** (Shift+Delete, USB drives, programs) or **Removed from Recycle Bin** (emptied).
+Folder deletes are marked (`is_folder`). Recycle Bin items deleted while the agent was off are reported when it starts.
+Restores are not reported as deletions. `watch_folders` accepts `{UserProfile}`, `{OtherDrives}` and
+`{RemovableDrives}`; noisy folders (`ignore_folders`: AppData, Temp, Program Files, .git, ...) are skipped.
+Detected Files shows the delete type, filters by it and shows **Deleted At**. See USER-GUIDE.md, Part 7.
+
+**Update an existing database:** run `database/migrations/phase16_deletions.sql` (safe to run again). Until then,
+updated agents keep their events and send them afterwards.
+
 ## Phase 15 - Add lab PCs with one enrollment key
 
 Adding PCs no longer needs `register-agent.php`, an IP address or a token per PC. Follow **[USER-GUIDE.md](USER-GUIDE.md)**.

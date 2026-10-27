@@ -11,6 +11,19 @@ New files are scanned on this PC (antivirus engines + static analysis) automatic
 
 It does **not** upload file contents, record keystrokes, capture the screen, control the computer, or hide itself. It runs as a normal visible program and writes everything it does to `mst_agent.log`.
 
+## Deleted files (Phase 16, agent 1.3)
+
+Deleted files are reported with `deleteMode`: `recycle_bin` (moved to the Recycle Bin: the agent reads the
+`$Recycle.Bin\<SID>\$I...` record Windows writes, which holds the original path, size and delete time, so deletes from
+**any folder** on the drive are seen), `permanent` (no Recycle Bin record within 3 seconds: Shift+Delete, USB drives,
+programs) and `recycle_bin_removed` (the record disappeared and the file was not restored). The agent never reads the
+deleted file itself. `mst_recycle_state.json` (next to the queue) remembers the records already seen, so items moved to
+the Recycle Bin while the agent was off are reported at the next start.
+
+New config.json options: `watch_recycle_bin` (default true), `ignore_folders` (folder names skipped anywhere below a
+watched folder), and the `watch_folders` placeholders `{UserProfile}`, `{OtherDrives}`, `{RemovableDrives}`
+(USB drives are added/removed while the agent runs). A folder inside another watched folder is watched once.
+
 ## Quick setup (Phase 15, recommended)
 
 Add PCs with an **enrollment key** instead of registering each one by hand. Step by step: [USER-GUIDE.md](../USER-GUIDE.md).

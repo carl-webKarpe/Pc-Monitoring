@@ -185,13 +185,13 @@ final class MySQLRepository
     public static function insertFileEvents(int $computerId, array $events): array
     {
         $db = self::db();
-        $statement = $db->prepare("INSERT INTO file_events (event_uid, computer_id, event_type, file_name, file_path, previous_path, file_size, sha256, detected_at, origin, download_url, risk_level, suggested_confidential) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Unknown', ?) ON DUPLICATE KEY UPDATE id = id");
+        $statement = $db->prepare("INSERT INTO file_events (event_uid, computer_id, event_type, delete_mode, is_folder, file_name, file_path, previous_path, file_size, sha256, detected_at, origin, download_url, risk_level, suggested_confidential) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Unknown', ?) ON DUPLICATE KEY UPDATE id = id");
         $stored = [];
         $db->beginTransaction();
         try {
             foreach ($events as $event) {
                 $exists = $event['type'] !== 'deleted';
-                $statement->execute([$event['uid'], $computerId, $event['type'], $event['fileName'], $event['filePath'], $event['previousPath'], $event['fileSize'], $event['sha256'], $event['detectedAt'], $event['origin'], $event['downloadUrl'], $exists && FileRisk::suggestConfidential($event['fileName'], $event['filePath']) ? 1 : 0]);
+                $statement->execute([$event['uid'], $computerId, $event['type'], $event['deleteMode'] ?? null, !empty($event['isFolder']) ? 1 : 0, $event['fileName'], $event['filePath'], $event['previousPath'], $event['fileSize'], $event['sha256'], $event['detectedAt'], $event['origin'], $event['downloadUrl'], $exists && FileRisk::suggestConfidential($event['fileName'], $event['filePath']) ? 1 : 0]);
                 if ($statement->rowCount() === 1) $stored[] = ['id' => (int)$db->lastInsertId(), 'computerId' => $computerId] + $event;
             }
             $db->commit();

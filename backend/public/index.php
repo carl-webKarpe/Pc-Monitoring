@@ -47,7 +47,7 @@ $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $path = preg_replace('#^/api/?#', '', $path);
 $segments = array_map('rawurldecode', array_values(array_filter(explode('/', trim($path, '/')), 'strlen')));
-if ($segments === []) Response::success('MST API', ['version' => '0.15.0', 'status' => 'ok']);
+if ($segments === []) Response::success('MST API', ['version' => '0.16.0', 'status' => 'ok']);
 
 $resource = $segments[0] ?? '';
 $id = $segments[1] ?? null;

@@ -3,6 +3,12 @@
 Only file metadata (name, location, size, time), a SHA-256 fingerprint and download evidence are collected.
 File contents are read solely to compute the hash and are never uploaded.
 
+How a file was deleted is reported as "deleteMode" (Phase 16):
+  recycle_bin          - moved to the Recycle Bin (File Explorer's Delete key), from any folder on the drive, with the
+                         original path and the real delete time (see recycle_bin.py)
+  permanent            - deleted without the Recycle Bin (Shift+Delete, a USB drive, a program, the command line)
+  recycle_bin_removed  - removed from the Recycle Bin (emptied): now permanently gone
+
 How a file arrived is reported as "origin":
   local             - the file appeared; nothing shows it was downloaded
   browser_download  - a browser finished a download (its temporary .crdownload/.part file was renamed)
@@ -28,6 +34,8 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from .config import AgentConfig
+from .folders import fixed_drives, removable_drives
+from .recycle_bin import RecycleBinWatcher, default_recycle_folders
 
 log = logging.getLogger("mst_agent.files")
 
@@ -39,6 +47,22 @@ VANISHED_MEMORY_SECONDS = 15  # a file that appeared and vanished unreported: ig
 WORKERS = 4                # new files are checked in parallel so a burst of files is not delayed
 BROWSER_TEMP_EXTENSIONS = {".crdownload", ".part", ".partial", ".download", ".opdownload"}
 KNOWN_HASHES_LIMIT = 5000  # remembered file hashes, to report "modified" only when the content really changed
+DELETE_GRACE_SECONDS = 3.0 # a delete waits this long for its Recycle Bin record before it is reported as permanent
+RECYCLED_MEMORY_SECONDS = 30.0
+DRIVE_CHECK_SECONDS = 10.0 # how often plugged-in USB drives are looked for
+AGENT_FOLDER = Path(__file__).resolve().parents[1]
+
+
+def now_monotonic() -> float:
+    return time.monotonic()
+
+
+def _inside(path: Path, folder: Path) -> bool:
+    try:
+        path.relative_to(folder)
+        return True
+    except ValueError:
+        return False
 
 
 def utc_now() -> str:
@@ -100,7 +124,15 @@ class FileMonitor:
     def __init__(self, config: AgentConfig, on_event: Callable[[dict], None]):
         self.config = config
         self.on_event = on_event
-        self._own_files = {config.queue_file.resolve(), config.log_file.resolve(), config.quarantine_folder.resolve()}
+        # Never report the agent's own files: its folder (program, .venv, config), queue, log, quarantine and state.
+        self._own_files = {AGENT_FOLDER, config.queue_file.resolve(), config.log_file.resolve(), config.quarantine_folder.resolve(),
+                           config.queue_file.resolve().with_name("mst_recycle_state.json")}
+        self._pending_deletes: dict[str, tuple[Path, str, float]] = {}  # path key -> (path, detected at, report after)
+        self._recycled_recently: dict[str, float] = {}                 # path key -> forget after
+        self._removable: dict[str, object] = {}                        # USB drive root -> watchdog watch
+        self._recycle: RecycleBinWatcher | None = None
+        self._stop = threading.Event()
+        self._handler = None
         self._pending: set[str] = set()
         self._vanished: dict[str, float] = {}  # path -> time it vanished before it was ever reported
         self._pending_lock = threading.Lock()
@@ -119,12 +151,30 @@ class FileMonitor:
         if path.suffix.lower() in self.config.ignore_extensions:
             return True
         resolved = path.resolve() if path.exists() else path
-        # Never report the agent's own queue/log files (or SQLite's journal files next to them).
-        return any(str(resolved).startswith(str(own)) for own in self._own_files)
+        # Never report the agent's own files (or SQLite's journal files next to its queue).
+        if any(str(resolved).startswith(str(own)) for own in self._own_files):
+            return True
+        return self._in_ignored_folder(path, whole_path=False)
+
+    def _in_ignored_folder(self, path: Path, whole_path: bool = True) -> bool:
+        """True when a folder between the watched folder and the file is noise (AppData, Temp, .git, ...).
+        whole_path: also check the folders above the watched folders (Recycle Bin records can come from anywhere)."""
+        roots = [root for root in [*self.watched, *(Path(key) for key in self._removable)] if path == root or _inside(path, root)]
+        if roots:
+            parts = path.relative_to(max(roots, key=lambda root: len(str(root)))).parts[:-1]
+        elif whole_path:
+            parts = path.parts[:-1]
+        else:
+            return False
+        return any(part.lower() in self.config.ignore_folders for part in parts)
+
+    @staticmethod
+    def _key(path: Path | str) -> str:
+        return os.path.normcase(str(path))
 
     # ---- lifecycle -------------------------------------------------------
     def start(self) -> list[Path]:
-        handler = _Handler(self)
+        self._handler = handler = _Handler(self)
         for folder in self.config.watch_folders:
             if folder.is_dir():
                 self._observer.schedule(handler, str(folder), recursive=self.config.recursive)
@@ -134,9 +184,22 @@ class FileMonitor:
         for worker in self._workers:
             worker.start()
         self._observer.start()
+        threading.Thread(target=self._housekeeping, name="mst-file-housekeeping", daemon=True).start()
+        if self.config.watch_removable_drives:
+            self._check_removable_drives()
+        if self.config.watch_recycle_bin:
+            folders = self.config.recycle_bin_folders or default_recycle_folders(fixed_drives() + removable_drives())
+            self._recycle = RecycleBinWatcher(folders, self.config.queue_file.resolve().with_name("mst_recycle_state.json"),
+                                              self.recycled, self.removed_from_recycle_bin)
+            recycle_watched = self._recycle.start()
+            log.info("Watching the Recycle Bin on %d drive(s): deletes with File Explorer are reported from any folder", len(recycle_watched))
         return self.watched
 
     def stop(self) -> None:
+        self._stop.set()
+        self._flush_pending_deletes(force=True)
+        if self._recycle is not None:
+            self._recycle.stop()
         self._observer.stop()
         self._observer.join(timeout=5)
         for worker in self._workers:
@@ -185,7 +248,73 @@ class FileMonitor:
                 # the finished download, a short-lived temp file). Reporting its deletion would be a false alarm.
                 return
             self._known_hashes.pop(str(path), None)
-        self._emit("deleted", path, detected_at=utc_now())
+            key = self._key(path)
+            if self._recycled_recently.get(key, 0) > now_monotonic():
+                return  # already reported from its Recycle Bin record
+            # Wait briefly for a Recycle Bin record: then it is "moved to the Recycle Bin", otherwise "permanent".
+            self._pending_deletes[key] = (path, utc_now(), now_monotonic() + DELETE_GRACE_SECONDS)
+
+    # ---- Recycle Bin (Phase 16) -------------------------------------------
+    def recycled(self, record: dict) -> None:
+        """A file or folder was moved to the Recycle Bin (from any folder). Reported with its original path and the
+        real delete time; replaces the plain delete the folder watcher may have seen for the same path."""
+        path = Path(record["originalPath"])
+        if path.name.startswith(self.config.ignore_name_prefixes) or (not record.get("isFolder") and path.suffix.lower() in self.config.ignore_extensions):
+            return
+        if self._in_ignored_folder(path):
+            return
+        key = self._key(path)
+        with self._pending_lock:
+            self._pending_deletes.pop(key, None)
+            if record.get("isFolder"):  # files of a deleted folder are covered by the folder's record
+                for pending in [other for other in self._pending_deletes if other.startswith(key + os.sep)]:
+                    self._pending_deletes.pop(pending, None)
+            self._recycled_recently[key] = now_monotonic() + RECYCLED_MEMORY_SECONDS
+        self._emit("deleted", path, detected_at=record["deletedAt"], size=record.get("size"), delete_mode="recycle_bin", is_folder=bool(record.get("isFolder")))
+
+    def removed_from_recycle_bin(self, record: dict, while_agent_off: bool) -> None:
+        path = Path(record["originalPath"])
+        if self._in_ignored_folder(path):
+            return
+        self._emit("deleted", path, detected_at=utc_now(), size=record.get("size"), delete_mode="recycle_bin_removed",
+                   is_folder=bool(record.get("isFolder")), note="while the agent was off" if while_agent_off else None)
+
+    def _flush_pending_deletes(self, force: bool = False) -> None:
+        now = now_monotonic()
+        with self._pending_lock:
+            due = [key for key, (_, _, report_after) in self._pending_deletes.items() if force or report_after <= now]
+            items = [self._pending_deletes.pop(key) for key in due]
+            self._recycled_recently = {key: until for key, until in self._recycled_recently.items() if until > now}
+        for path, detected_at, _ in items:
+            self._emit("deleted", path, detected_at=detected_at, delete_mode="permanent")
+
+    # ---- USB drives (Phase 16) ---------------------------------------------
+    def _check_removable_drives(self) -> None:
+        current = {str(drive): drive for drive in removable_drives()}
+        for root, drive in current.items():
+            if root not in self._removable:
+                try:
+                    self._removable[root] = self._observer.schedule(self._handler, root, recursive=self.config.recursive)
+                    log.info("USB drive %s plugged in: watching it", root)
+                except OSError as error:
+                    log.warning("Cannot watch USB drive %s: %s", root, error)
+        for root in [root for root in self._removable if root not in current]:
+            try:
+                self._observer.unschedule(self._removable.pop(root))
+            except (KeyError, ValueError, OSError):
+                pass
+            log.info("USB drive %s removed", root)
+
+    def _housekeeping(self) -> None:
+        last_drive_check = now_monotonic()
+        while not self._stop.wait(0.5):
+            try:
+                self._flush_pending_deletes()
+                if self.config.watch_removable_drives and now_monotonic() - last_drive_check >= DRIVE_CHECK_SECONDS:
+                    last_drive_check = now_monotonic()
+                    self._check_removable_drives()
+            except Exception:
+                log.exception("File monitor housekeeping failed")
 
     def _remember(self, path: Path, sha256: str | None) -> None:
         with self._pending_lock:
@@ -246,7 +375,8 @@ class FileMonitor:
         return last_size if last_size >= 0 else None
 
     def _emit(self, event_type: str, path: Path, detected_at: str, size: int | None = None, sha256: str | None = None,
-              previous: Path | None = None, origin: str | None = None, download_url: str | None = None) -> None:
+              previous: Path | None = None, origin: str | None = None, download_url: str | None = None,
+              delete_mode: str | None = None, is_folder: bool = False, note: str | None = None) -> None:
         event = {
             "uid": str(uuid.uuid4()),
             "type": event_type,
@@ -258,9 +388,14 @@ class FileMonitor:
             "detectedAt": detected_at,
             "origin": origin,
             "downloadUrl": download_url,
+            "deleteMode": delete_mode,
+            "isFolder": is_folder,
         }
         detail = f" ({size} bytes)" if size is not None else ""
-        log.info("File %s: %s%s%s", event_type, f"{previous} -> " if previous else "", path, detail + (f" [{origin}]" if origin and origin != "local" else ""))
+        label = {"recycle_bin": " [moved to Recycle Bin]", "permanent": " [deleted permanently]", "recycle_bin_removed": " [removed from Recycle Bin]"}.get(delete_mode or "", "")
+        label += f" [{origin}]" if origin and origin != "local" else ""
+        label += f" ({note})" if note else ""
+        log.info("%s %s: %s%s%s", "Folder" if is_folder else "File", event_type, f"{previous} -> " if previous else "", path, detail + label)
         self.on_event(event)
 
 

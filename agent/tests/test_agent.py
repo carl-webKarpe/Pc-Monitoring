@@ -550,3 +550,158 @@ def test_agent_saves_the_new_server_address_after_finding_it(tmp_path, monkeypat
     assert agent.config.server_url == "http://10.9.8.7:8081/api"
     assert read_json(path)["server_url"] == "http://10.9.8.7:8081/api"
     agent.outbox.close()
+
+
+# ---- Phase 16: Recycle Bin, permanent deletes, wider watch scope -------------------------------------------
+import struct  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from mst_agent import recycle_bin  # noqa: E402
+
+
+def index_record(original: str, size: int, when: datetime, version: int = 2) -> bytes:
+    """A Windows $I record: version, size, delete time (FILETIME), path (v1: fixed 260 chars, v2: length + path)."""
+    filetime = int((when - datetime(1601, 1, 1, tzinfo=timezone.utc)) / timedelta(microseconds=1)) * 10
+    path = original.encode("utf-16-le")
+    if version == 1:
+        return struct.pack("<qqq", 1, size, filetime) + path.ljust(520, b"\0")
+    return struct.pack("<qqqi", 2, size, filetime, len(original) + 1) + path + b"\0\0"
+
+
+def test_recycle_bin_records_are_parsed_both_formats():
+    when = datetime(2026, 10, 27, 6, 14, 5, tzinfo=timezone.utc)
+    for version in (1, 2):
+        record = recycle_bin.parse_index(index_record(r"C:\Users\Student\Documents\report.docx", 12345, when, version))
+        assert record == {"originalPath": r"C:\Users\Student\Documents\report.docx", "size": 12345, "deletedAt": "2026-10-27T06:14:05Z"}
+    assert recycle_bin.parse_index(b"garbage") is None
+    assert recycle_bin.parse_index(struct.pack("<qqq", 7, 1, 1)) is None
+
+
+def test_recycle_bin_changes_while_the_agent_was_off_are_reported(tmp_path):
+    bin_folder = tmp_path / "bin"
+    bin_folder.mkdir()
+    state = tmp_path / "state.json"
+    old = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    (bin_folder / "$IAAAAAA.txt").write_bytes(index_record(str(tmp_path / "old.txt"), 1, old))
+    recycled, removed = [], []
+    first = recycle_bin.RecycleBinWatcher([bin_folder], state, recycled.append, lambda record, off: removed.append((record, off)))
+    first.start(); first.stop()
+    assert recycled == [] and removed == []  # first start: what is already there is only the starting point
+    (bin_folder / "$IAAAAAA.txt").unlink()  # emptied while the agent was off
+    (bin_folder / "$IBBBBBB.pdf").write_bytes(index_record(str(tmp_path / "new.pdf"), 2, old + timedelta(days=1)))
+    second = recycle_bin.RecycleBinWatcher([bin_folder], state, recycled.append, lambda record, off: removed.append((record, off)))
+    second.start(); second.stop()
+    assert [item["originalPath"] for item in recycled] == [str(tmp_path / "new.pdf")]
+    assert recycled[0]["deletedAt"] == "2026-10-02T00:00:00Z"  # the real delete time, not when the agent noticed
+    assert [(item["originalPath"], off) for item, off in removed] == [(str(tmp_path / "old.txt"), True)]
+
+
+def deletion_monitor(tmp_path):
+    (tmp_path / "watched").mkdir(exist_ok=True)
+    (tmp_path / "bin").mkdir(exist_ok=True)
+    # The test folders live under /tmp; "tmp" is on the default noise list, so use a list without it.
+    config = load_config(write_config(tmp_path, recycle_bin_folders=[str(tmp_path / "bin")], ignore_folders=["AppData", ".git", "$Recycle.Bin"]))
+    events: list[dict] = []
+    monitor = FileMonitor(config, events.append)
+    monitor.start()
+    return monitor, events
+
+
+def wait_until(condition, timeout=10.0):
+    end = time.time() + timeout
+    while time.time() < end:
+        if condition():
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def test_explorer_delete_is_reported_once_as_moved_to_recycle_bin(tmp_path):
+    monitor, events = deletion_monitor(tmp_path)
+    try:
+        target = tmp_path / "watched" / "notes.txt"
+        target.write_text("hello")
+        assert wait_until(lambda: any(e["type"] == "created" for e in events))
+        when = datetime(2026, 10, 27, 1, 2, 3, tzinfo=timezone.utc)
+        target.unlink()  # what the folder watcher sees: the file left the folder ...
+        (tmp_path / "bin" / "$IQ1W2E3.txt").write_bytes(index_record(str(target), 5, when))  # ... and Windows' record
+        assert wait_until(lambda: any(e["type"] == "deleted" for e in events))
+        time.sleep(4)  # longer than the grace period: no second "permanent" event may follow
+        deletes = [e for e in events if e["type"] == "deleted"]
+        assert len(deletes) == 1
+        assert deletes[0]["deleteMode"] == "recycle_bin" and deletes[0]["detectedAt"] == "2026-10-27T01:02:03Z"
+        assert deletes[0]["filePath"] == str(target) and deletes[0]["fileSize"] == 5 and deletes[0]["isFolder"] is False
+    finally:
+        monitor.stop()
+
+
+def test_recycle_bin_reports_deletes_from_folders_that_are_not_watched(tmp_path):
+    monitor, events = deletion_monitor(tmp_path)
+    try:
+        elsewhere = tmp_path / "Projects" / "plan.xlsx"  # not inside the watched folder
+        (tmp_path / "bin" / "$RZZ9.xlsx").mkdir()          # a folder in the Recycle Bin -> isFolder
+        (tmp_path / "bin" / "$IZZ9.xlsx").write_bytes(index_record(str(elsewhere), 9, datetime.now(timezone.utc)))
+        assert wait_until(lambda: any(e.get("deleteMode") == "recycle_bin" for e in events))
+        event = next(e for e in events if e.get("deleteMode") == "recycle_bin")
+        assert event["filePath"] == str(elsewhere) and event["isFolder"] is True
+        (tmp_path / "bin" / "$IAPP.dat").write_bytes(index_record(str(tmp_path / "x" / "AppData" / "cache.dat"), 1, datetime.now(timezone.utc)))
+        time.sleep(1.5)
+        assert not any("AppData" in e["filePath"] for e in events)  # noise folders are ignored here too
+    finally:
+        monitor.stop()
+
+
+def test_shift_delete_is_reported_as_permanent_and_emptying_as_removed(tmp_path):
+    monitor, events = deletion_monitor(tmp_path)
+    try:
+        target = tmp_path / "watched" / "secret.docx"
+        target.write_text("x")
+        assert wait_until(lambda: any(e["type"] == "created" for e in events))
+        target.unlink()  # no Recycle Bin record: Shift+Delete
+        assert wait_until(lambda: any(e.get("deleteMode") == "permanent" for e in events), timeout=8)
+        # In the Recycle Bin, then emptied: reported as removed (permanently gone)
+        gone = tmp_path / "Documents" / "old.pptx"
+        index = tmp_path / "bin" / "$IEMPTY.pptx"
+        index.write_bytes(index_record(str(gone), 3, datetime.now(timezone.utc)))
+        assert wait_until(lambda: any(e.get("deleteMode") == "recycle_bin" and e["filePath"] == str(gone) for e in events))
+        index.unlink()
+        assert wait_until(lambda: any(e.get("deleteMode") == "recycle_bin_removed" for e in events), timeout=8)
+        # Restored items are not deletions
+        restored = tmp_path / "watched" / "back.txt"
+        index2 = tmp_path / "bin" / "$IRESTO.txt"
+        index2.write_bytes(index_record(str(restored), 1, datetime.now(timezone.utc)))
+        assert wait_until(lambda: sum(e.get("deleteMode") == "recycle_bin" for e in events) == 2)
+        restored.write_text("restored")
+        index2.unlink()
+        time.sleep(3.5)
+        assert not any(e.get("deleteMode") == "recycle_bin_removed" and e["filePath"] == str(restored) for e in events)
+    finally:
+        monitor.stop()
+
+
+def test_noise_folders_inside_watched_folders_are_ignored(tmp_path):
+    monitor, events = deletion_monitor(tmp_path)
+    try:
+        for folder in ("AppData/Local", ".git", "Documents"):
+            (tmp_path / "watched" / folder).mkdir(parents=True)
+        (tmp_path / "watched" / "AppData" / "Local" / "cache.bin").write_text("x")
+        (tmp_path / "watched" / ".git" / "index").write_text("x")
+        (tmp_path / "watched" / "Documents" / "essay.docx").write_text("x")
+        assert wait_until(lambda: any(e["fileName"] == "essay.docx" for e in events))
+        time.sleep(2.5)
+        assert {e["fileName"] for e in events} == {"essay.docx"}
+    finally:
+        monitor.stop()
+
+
+def test_watch_scope_placeholders(tmp_path, monkeypatch):
+    from mst_agent import config as config_module
+    profile = tmp_path / "profile"
+    (profile / "Downloads").mkdir(parents=True)
+    monkeypatch.setattr(config_module, "user_profile", lambda: profile)
+    monkeypatch.setattr(config_module, "other_fixed_drives", lambda: [tmp_path / "D"])
+    config = load_config(write_config(tmp_path, watch_folders=["{UserProfile}", str(profile / "Downloads"), "{OtherDrives}", "{RemovableDrives}"],
+                                      quarantine_folder=str(profile / "AppData" / "MST" / "quarantine")))
+    assert config.watch_folders == [profile, tmp_path / "D"]  # Downloads is inside the profile: not watched twice
+    assert config.watch_removable_drives is True
+    assert config.watch_recycle_bin is True  # on by default

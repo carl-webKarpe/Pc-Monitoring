@@ -44,7 +44,19 @@ function fileActivityBadge(file) {
     renamed: '<span class="scan-result-status pending"><i class="fa-solid fa-i-cursor"></i> RENAMED</span>',
     deleted: '<span class="severity-level unknown"><i class="fa-solid fa-trash-can"></i> DELETED</span>'
   }[file.eventType] || fileEsc(file.eventType);
-  return badge + (fileOrigin(file) ? `<br>${fileOrigin(file)}` : '');
+  return badge + (fileDeleteHow(file) ? `<br>${fileDeleteHow(file)}` : '') + (fileOrigin(file) ? `<br>${fileOrigin(file)}` : '');
+}
+
+// Phase 16: how a file was deleted (reported by agent 1.3+).
+const FILE_DELETE_MODES = {
+  recycle_bin: ['fa-recycle', 'Moved to Recycle Bin', 'Deleted with File Explorer (Delete key). It can still be restored from the Recycle Bin.'],
+  permanent: ['fa-ban', 'Deleted permanently', 'Deleted without the Recycle Bin: Shift+Delete, a USB drive, a program or the command line.'],
+  recycle_bin_removed: ['fa-dumpster', 'Removed from Recycle Bin', 'Removed from the Recycle Bin (emptied or deleted there): now permanently gone.'],
+};
+function fileDeleteHow(file) {
+  const mode = FILE_DELETE_MODES[file.deleteMode];
+  if (file.eventType !== 'deleted' || !mode) return '';
+  return `<span class="origin-tag" title="${fileEsc(mode[2])}"><i class="fa-solid ${mode[0]}"></i> ${fileEsc(mode[1])}${Number(file.isFolder) ? ' (folder)' : ''}</span>`;
 }
 
 function fileStatusBadge(file) {
@@ -97,7 +109,7 @@ function renderFiles() {
   const since = days === 'all' ? null : (() => { const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - (Number(days) - 1)); return start; })();
   const rows = fileState.rows.filter((file) => `${file.fileName} ${file.filePath} ${file.previousPath || ''} ${file.computerHostname} ${file.computerDeviceId} ${file.sha256 || ''}`.toLowerCase().includes(query)
     && (computer === 'all' || String(file.computerId) === computer)
-    && (activity === 'all' || (activity === 'downloaded' ? fileDownloaded(file) : file.eventType === activity))
+    && (activity === 'all' || (activity === 'downloaded' ? fileDownloaded(file) : activity.startsWith('deleted:') ? file.eventType === 'deleted' && file.deleteMode === activity.slice(8) : file.eventType === activity))
     && fileMatchesRisk(file, risk)
     && (classification === 'all' || fileClassification(file) === classification)
     && (!since || (mstParseDate(file.detectedAt) || 0) >= since));
@@ -185,9 +197,10 @@ async function showFileDetails(id, { refresh = false } = {}) {
       <div><span>Activity</span><strong>${fileActivityBadge(file)}</strong></div>
       <div class="file-wide"><span>Location</span><strong>${fileEsc(file.filePath)}</strong></div>
       ${file.previousPath ? `<div class="file-wide"><span>Previous Location (renamed from)</span><strong>${fileEsc(file.previousPath)}</strong></div>` : ''}
+      ${file.eventType === 'deleted' && FILE_DELETE_MODES[file.deleteMode] ? `<div class="file-wide"><span>How It Was Deleted</span><strong>${fileEsc(FILE_DELETE_MODES[file.deleteMode][1])}${Number(file.isFolder) ? ' (a whole folder)' : ''} — ${fileEsc(FILE_DELETE_MODES[file.deleteMode][2])}</strong></div>` : ''}
       <div class="file-wide"><span>How It Arrived</span><strong>${origin}</strong></div>
       <div><span>File Size</span><strong>${fileEsc(fileSize(file.fileSize))}</strong></div>
-      <div><span>Detected</span><strong>${fileEsc(mstFormatDate(file.detectedAt))}</strong></div>
+      <div><span>${file.eventType === 'deleted' ? 'Deleted At' : 'Detected'}</span><strong>${fileEsc(mstFormatDate(file.detectedAt))}</strong></div>
       <div><span>Classification</span><strong>${fileClassBadge(file)}</strong>${suggestion}</div>
       <div><span>Status</span><strong>${fileStatusBadge(file)}</strong></div>
       <div class="file-wide"><span>SHA-256</span><strong class="hash-cell">${fileEsc(file.sha256 || 'Not available (file too large or deleted)')}</strong></div>

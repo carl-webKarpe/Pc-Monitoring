@@ -198,12 +198,16 @@ final class AgentController
         if ($size !== null && (!is_int($size) || $size < 0)) return null;
         if ($sha256 !== null && (!is_string($sha256) || !preg_match('/^[0-9a-f]{64}$/i', $sha256))) return null;
         if ($origin !== null && !in_array($origin, ['local', 'browser_download', 'internet'], true)) return null;
+        $deleteMode = $event['deleteMode'] ?? null;  // Phase 16; older agents do not send it
+        if ($deleteMode !== null && ($type !== 'deleted' || !in_array($deleteMode, ['recycle_bin', 'permanent', 'recycle_bin_removed'], true))) return null;
+        $isFolder = $event['isFolder'] ?? false;
+        if (!is_bool($isFolder)) return null;
         if (!is_string($detected)) return null;
         try { $time = new DateTimeImmutable($detected); } catch (Exception) { return null; }
         // Store in the server's local time, like the rest of the MST timestamps; reject clearly wrong clocks.
         $time = $time->setTimezone(new DateTimeZone(date_default_timezone_get()));
         if ($time > new DateTimeImmutable('+1 day') || $time < new DateTimeImmutable('-1 year')) return null;
         return ['uid' => strtolower($uid), 'type' => $type, 'fileName' => $name, 'filePath' => $path, 'previousPath' => $previous, 'fileSize' => $size, 'sha256' => $sha256 === null ? null : strtolower($sha256),
-            'detectedAt' => $time->format('Y-m-d H:i:s'), 'origin' => $type === 'deleted' ? null : $origin, 'downloadUrl' => $type === 'deleted' ? null : ScanService::cleanUrl($event['downloadUrl'] ?? null)];
+            'detectedAt' => $time->format('Y-m-d H:i:s'), 'deleteMode' => $deleteMode, 'isFolder' => $isFolder, 'origin' => $type === 'deleted' ? null : $origin, 'downloadUrl' => $type === 'deleted' ? null : ScanService::cleanUrl($event['downloadUrl'] ?? null)];
     }
 }
