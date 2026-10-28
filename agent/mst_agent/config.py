@@ -168,15 +168,10 @@ def load_config(path: str | Path, require_token: bool = True) -> AgentConfig:
     )
     if config.antivirus not in ("auto", "defender", "clamav", "none"):
         errors.append("antivirus must be auto, defender, clamav or none")
-    def ignored_inside(path: Path, folder: Path) -> bool:
-        try:
-            parts = path.resolve().relative_to(folder.resolve()).parts
-        except (ValueError, OSError):
-            return False
-        return any(part.lower() in config.ignore_folders for part in parts)
-
-    if any(_inside(config.quarantine_folder, folder) and not ignored_inside(config.quarantine_folder, folder) for folder in config.watch_folders):
-        errors.append("quarantine_folder must not be inside a watch folder")
+    # The quarantine folder may sit inside a watched folder (the monitor never reports the agent's own files), but a
+    # watched folder inside the quarantine folder would be hidden entirely.
+    if any(_inside(folder, config.quarantine_folder) for folder in config.watch_folders):
+        errors.append("a watch folder must not be the quarantine_folder or inside it")
     if config.tls_ca_bundle is not None and not config.tls_ca_bundle.is_file():
         errors.append(f"tls_ca_bundle file not found: {config.tls_ca_bundle}")
     if errors:

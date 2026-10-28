@@ -61,6 +61,8 @@ class Quarantine:
             raise QuarantineError("The file no longer exists at its original location")
         if not is_inside(source, self.watch_folders):
             raise QuarantineError("The file is outside the monitored folders")
+        if is_inside(source, [self.folder]):  # the quarantine folder may sit inside a watched folder
+            raise QuarantineError("The file is already in the quarantine folder")
         self._check_hash(source, sha256, "The file")
         self.folder.mkdir(parents=True, exist_ok=True)
         try:
@@ -85,6 +87,8 @@ class Quarantine:
             raise QuarantineError("The quarantined file was not found")
         if not target.parent.is_dir() or not is_inside(target.parent, self.watch_folders):
             raise QuarantineError("The original folder no longer exists or is outside the monitored folders")
+        if is_inside(target.parent, [self.folder]):
+            raise QuarantineError("A file cannot be released into the quarantine folder")
         if target.exists():
             raise QuarantineError("A file with the same name now exists at the original location")
         self._check_hash(source, sha256, "The quarantined file")

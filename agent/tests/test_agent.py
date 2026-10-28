@@ -388,9 +388,12 @@ def test_quarantine_release_and_delete_verify_the_file(tmp_path):
         quarantine.quarantine(9, str(outside), hashlib.sha256(b"MZ").hexdigest())
 
 
-def test_quarantine_folder_cannot_be_inside_a_watch_folder(tmp_path):
+def test_quarantine_folder_inside_a_watch_folder_is_allowed_and_never_reported(tmp_path):
+    config = load_config(write_config(tmp_path, quarantine_folder=str(tmp_path / "watched" / "q")))
+    monitor = FileMonitor(config, lambda event: None)
+    assert monitor.is_ignored(tmp_path / "watched" / "q" / "1-abc.quarantined")
     with pytest.raises(ConfigError, match="quarantine_folder"):
-        load_config(write_config(tmp_path, quarantine_folder=str(tmp_path / "watched" / "q")))
+        load_config(write_config(tmp_path, quarantine_folder=str(tmp_path)))  # would hide the watched folder
 
 
 def test_monitor_reports_renames_real_modifications_and_browser_downloads(tmp_path, monkeypatch):
@@ -705,3 +708,325 @@ def test_watch_scope_placeholders(tmp_path, monkeypatch):
     assert config.watch_folders == [profile, tmp_path / "D"]  # Downloads is inside the profile: not watched twice
     assert config.watch_removable_drives is True
     assert config.watch_recycle_bin is True  # on by default
+
+
+# ---- Phase 16 review fixes: one test per problem found -------------------------------------------------------
+import threading as _threading  # noqa: E402
+
+
+def make_monitor(tmp_path, **overrides):
+    (tmp_path / "watched").mkdir(exist_ok=True)
+    options = {"ignore_folders": ["AppData", ".git", "$Recycle.Bin"]}
+    options.update(overrides)
+    events: list[dict] = []
+    monitor = FileMonitor(load_config(write_config(tmp_path, **options)), events.append)
+    return monitor, events
+
+
+def test_fix1_a_recycle_bin_created_after_the_start_is_found(tmp_path, monkeypatch):
+    bin_folder = tmp_path / "bin"
+    monkeypatch.setattr(file_monitor, "default_recycle_folders", lambda drives: [bin_folder] if bin_folder.exists() else [])
+    monitor, events = make_monitor(tmp_path)
+    monitor.start()
+    try:
+        target = tmp_path / "watched" / "first.txt"
+        target.write_text("x")
+        assert wait_until(lambda: any(e["type"] == "created" for e in events))
+        bin_folder.mkdir()  # Windows creates the user's bin folder at the first delete on the drive
+        (bin_folder / "$IFIRST.txt").write_bytes(index_record(str(target), 1, datetime.now(timezone.utc)))
+        target.unlink()
+        assert wait_until(lambda: any(e["type"] == "deleted" for e in events))
+        time.sleep(1)
+        assert [e["deleteMode"] for e in events if e["type"] == "deleted"] == ["recycle_bin"]
+    finally:
+        monitor.stop()
+
+
+def test_fix2_many_files_deleted_at_once_are_all_recycle_bin_and_reported_once(tmp_path, monkeypatch):
+    slow = recycle_bin._Handler.on_created
+    monkeypatch.setattr(recycle_bin._Handler, "on_created", lambda self, event: (time.sleep(0.05), slow(self, event)))  # a notification backlog
+    monitor, events = make_monitor(tmp_path, recycle_bin_folders=[str(tmp_path / "bin")])
+    (tmp_path / "bin").mkdir()
+    files = [tmp_path / "watched" / f"file{n:03}.txt" for n in range(150)]
+    for path in files:
+        path.write_text("x")
+    monitor.start()
+    try:
+        now = datetime.now(timezone.utc)
+        for number, path in enumerate(files):
+            (tmp_path / "bin" / f"$IBULK{number:03}.txt").write_bytes(index_record(str(path), 1, now))
+            path.unlink()
+        assert wait_until(lambda: sum(e["type"] == "deleted" for e in events) >= 150, timeout=30)
+        time.sleep(4)
+        deletes = [e for e in events if e["type"] == "deleted"]
+        assert len(deletes) == 150 and {e["deleteMode"] for e in deletes} == {"recycle_bin"}
+    finally:
+        monitor.stop()
+
+
+def test_fix3_files_inside_a_recycled_folder_are_not_reported_one_by_one(tmp_path):
+    monitor, events = make_monitor(tmp_path, recycle_bin_folders=[str(tmp_path / "bin")])
+    (tmp_path / "bin").mkdir()
+    project = tmp_path / "watched" / "Project"
+    project.mkdir()
+    for name in ("a.txt", "b.txt", "c.txt"):
+        (project / name).write_text("x")
+    monitor.start()
+    try:
+        (tmp_path / "bin" / "$RPROJ").mkdir()
+        (tmp_path / "bin" / "$IPROJ").write_bytes(index_record(str(project), 3, datetime.now(timezone.utc)))
+        assert wait_until(lambda: any(e.get("isFolder") for e in events))
+        for name in ("a.txt", "b.txt", "c.txt"):
+            (project / name).unlink()  # what the watcher reports for the folder's files
+        time.sleep(4.5)
+        deletes = [e for e in events if e["type"] == "deleted"]
+        assert [(e["fileName"], e["deleteMode"], e["isFolder"]) for e in deletes] == [("Project", "recycle_bin", True)]
+    finally:
+        monitor.stop()
+
+
+def test_fix4_without_a_watched_recycle_bin_the_delete_type_is_unknown(tmp_path):
+    monitor, events = make_monitor(tmp_path, watch_recycle_bin=False)
+    target = tmp_path / "watched" / "x.txt"
+    target.write_text("x")
+    monitor.start()
+    try:
+        target.unlink()
+        assert wait_until(lambda: any(e["type"] == "deleted" for e in events), timeout=8)
+        assert [e["deleteMode"] for e in events if e["type"] == "deleted"] == [None]  # not a guessed "permanent"
+    finally:
+        monitor.stop()
+
+
+def test_fix5_usb_drives_can_change_while_events_are_filtered(tmp_path, monkeypatch):
+    monitor, _ = make_monitor(tmp_path, watch_folders=[str(tmp_path / "watched"), "{RemovableDrives}"], watch_recycle_bin=False)
+    usb = [tmp_path / f"usb{n}" for n in range(30)]
+    for folder in usb:
+        folder.mkdir()
+    monitor.start()
+    errors: list[Exception] = []
+    stop = _threading.Event()
+
+    def filter_events():
+        while not stop.is_set():
+            try:
+                monitor.is_ignored(tmp_path / "watched" / "doc.txt")
+            except Exception as error:  # "dictionary changed size during iteration" before the fix
+                errors.append(error)
+
+    worker = _threading.Thread(target=filter_events)
+    worker.start()
+    try:
+        for round_number in range(40):
+            monkeypatch.setattr(file_monitor, "removable_drives", lambda: usb if round_number % 2 == 0 else [])
+            monitor._check_removable_drives()
+    finally:
+        stop.set()
+        worker.join()
+        monitor.stop()
+    assert errors == []
+
+
+def test_fix6_a_half_written_recycle_bin_record_is_not_accepted():
+    whole = index_record(r"C:\Users\Student\Documents\report.docx", 10, datetime.now(timezone.utc))
+    assert recycle_bin.parse_index(whole) is not None
+    assert recycle_bin.parse_index(whole[:40]) is None  # header + part of the path: wait for the rest
+    assert recycle_bin.parse_index(index_record(r"C:\x.txt", 1, datetime.now(timezone.utc), version=1)[:300]) is None
+
+
+def test_fix7_emptying_a_big_recycle_bin_needs_no_thread_per_item(tmp_path):
+    bin_folder = tmp_path / "bin"
+    bin_folder.mkdir()
+    now = datetime.now(timezone.utc)
+    for number in range(800):
+        (bin_folder / f"$IBIG{number:04}.txt").write_bytes(index_record(str(tmp_path / "gone" / f"f{number}.txt"), 1, now))
+    removed = []
+    watcher = recycle_bin.RecycleBinWatcher([bin_folder], tmp_path / "state.json", lambda record: None, lambda record, off: removed.append(record))
+    watcher.start()
+    threads_before = _threading.active_count()
+    try:
+        for number in range(800):
+            watcher.index_removed(bin_folder / f"$IBIG{number:04}.txt")
+            (bin_folder / f"$IBIG{number:04}.txt").unlink()
+        assert _threading.active_count() <= threads_before + 1
+        time.sleep(recycle_bin.RESTORE_CHECK_SECONDS + 0.2)
+        watcher.tick()
+        assert len(removed) == 800
+    finally:
+        watcher.stop()
+    assert json.loads((tmp_path / "state.json").read_text()) == {}
+
+
+def test_fix8_filtering_needs_no_disk_access(tmp_path, monkeypatch):
+    monitor, _ = make_monitor(tmp_path)
+
+    def no_disk(*args, **kwargs):
+        raise AssertionError("is_ignored touched the disk")
+
+    monitor.watched = [tmp_path / "watched"]
+    monkeypatch.setattr(Path, "exists", no_disk)
+    monkeypatch.setattr(Path, "resolve", no_disk)
+    assert monitor.is_ignored(tmp_path / "watched" / "AppData" / "Local" / "cache.bin")
+    assert not monitor.is_ignored(tmp_path / "watched" / "Documents" / "essay.docx")
+
+
+def test_fix10_a_delete_right_before_the_agent_stops_keeps_its_label_and_is_not_repeated(tmp_path):
+    (tmp_path / "bin").mkdir()
+    target = tmp_path / "watched" / "late.txt"
+    monitor, events = make_monitor(tmp_path, recycle_bin_folders=[str(tmp_path / "bin")])
+    target.write_text("x")
+    monitor.start()
+    target.unlink()
+    (tmp_path / "bin" / "$ILATE.txt").write_bytes(index_record(str(target), 1, datetime.now(timezone.utc)))
+    monitor.stop()  # signed out within the grace period
+    assert [e["deleteMode"] for e in events if e["type"] == "deleted"] == ["recycle_bin"]
+    again, later = make_monitor(tmp_path, recycle_bin_folders=[str(tmp_path / "bin")])
+    again.start()
+    again.stop()
+    assert later == []  # not reported a second time at the next start
+
+
+# ---- Second review: follow-up fixes ------------------------------------------------------------------------
+def test_review2_busy_or_missing_recycle_bin_at_start_is_not_reported_as_emptied(tmp_path):
+    usb_bin, local_bin = tmp_path / "usb_bin", tmp_path / "local_bin"
+    usb_bin.mkdir(); local_bin.mkdir()
+    now = datetime.now(timezone.utc)
+    (usb_bin / "$IUSB.txt").write_bytes(index_record(str(tmp_path / "gone" / "usb.txt"), 1, now))
+    (local_bin / "$IBUSY.txt").write_bytes(index_record(str(tmp_path / "gone" / "busy.txt"), 1, now))
+    recycled, removed = [], []
+    def watcher():
+        return recycle_bin.RecycleBinWatcher([local_bin, usb_bin], tmp_path / "state.json", recycled.append, lambda record, off: removed.append(record))
+    first = watcher(); first.start(); first.stop()
+    (local_bin / "$IBUSY.txt").write_bytes(b"\x02\x00")   # being rewritten / locked at the next start
+    import shutil
+    shutil.rmtree(usb_bin)                                  # USB drive unplugged while the agent was off
+    second = watcher(); second.start(); second.stop()
+    assert removed == [] and recycled == []
+    usb_bin.mkdir()
+    (usb_bin / "$IUSB.txt").write_bytes(index_record(str(tmp_path / "gone" / "usb.txt"), 1, now))
+    third = watcher(); third.start(); third.stop()
+    assert removed == [] and recycled == []                 # back again: no false "emptied", no duplicate
+
+
+def test_review2_own_files_are_matched_exactly(tmp_path):
+    monitor, _ = make_monitor(tmp_path)
+    agent_folder = file_monitor.AGENT_FOLDER
+    assert monitor.is_ignored(agent_folder / "mst_agent" / "agent.py")
+    assert not monitor.is_ignored(agent_folder.with_name(agent_folder.name + "_backup") / "evil.exe")
+    queue = monitor.config.queue_file
+    assert monitor.is_ignored(queue.with_name(queue.name + "-wal"))
+    assert not monitor.is_ignored(queue.with_name(queue.name + "x.txt"))
+
+
+def test_review2_quarantine_never_acts_on_its_own_folder(tmp_path):
+    from mst_agent.quarantine import Quarantine, QuarantineError
+    watched = tmp_path / "watched"
+    folder = watched / "quarantine"
+    folder.mkdir(parents=True)
+    inside = folder / "5-abc.quarantined.json"
+    inside.write_text("{}")
+    quarantine = Quarantine(folder, [watched], 10_000_000)
+    with pytest.raises(QuarantineError, match="already in the quarantine folder"):
+        quarantine.quarantine(9, str(inside), sha256_of(inside, 10_000_000))
+
+
+def test_review2_a_broken_record_is_not_read_again_until_it_changes(tmp_path, monkeypatch):
+    bin_folder = tmp_path / "bin"
+    bin_folder.mkdir()
+    broken = bin_folder / "$IBROKEN.txt"
+    broken.write_bytes(b"not a record")
+    watcher = recycle_bin.RecycleBinWatcher([bin_folder], tmp_path / "state.json", lambda record: None, lambda record, off: None)
+    watcher.start()
+    reads = []
+    original = recycle_bin.RecycleBinWatcher._read_status
+    monkeypatch.setattr(recycle_bin.RecycleBinWatcher, "_read_status", staticmethod(lambda index, attempts=5: reads.append(index) or original(index, attempts)))
+    try:
+        for _ in range(5):
+            watcher.poll()
+        assert len(reads) == 1
+        broken.write_bytes(index_record(str(tmp_path / "fixed.txt"), 1, datetime.now(timezone.utc)))
+        watcher.poll()  # the file changed: read again (the live watcher may read it too)
+        assert len(reads) >= 2 and str(broken) in watcher._known
+        settled = len(reads)
+        for _ in range(5):
+            watcher.poll()
+        assert len(reads) == settled  # known now: not read again
+    finally:
+        watcher.stop()
+
+
+def test_review2_a_failed_state_save_is_retried(tmp_path, monkeypatch):
+    watcher = recycle_bin.RecycleBinWatcher([], tmp_path / "state.json", lambda record: None, lambda record, off: None)
+    calls = []
+    def flaky(path, data):
+        calls.append(1)
+        if len(calls) == 1:
+            raise OSError("locked by antivirus")
+        path.write_text(json.dumps(data))
+    monkeypatch.setattr(recycle_bin, "write_json", flaky)
+    watcher._known["x"] = {"originalPath": "x"}
+    watcher._mark_dirty()
+    watcher.save()
+    assert watcher._dirty_since is not None   # still to be saved
+    watcher.save()
+    assert watcher._dirty_since is None and json.loads((tmp_path / "state.json").read_text()) == {"x": {"originalPath": "x"}}
+
+
+# ---- Third review: last edge cases ---------------------------------------------------------------------------
+def test_review3_own_folder_siblings_are_watched_and_own_side_files_ignored(tmp_path):
+    monitor, _ = make_monitor(tmp_path)
+    agent_folder = file_monitor.AGENT_FOLDER
+    assert not monitor.is_ignored(agent_folder.with_name(agent_folder.name + "-old") / "x.exe")
+    quarantine = monitor.config.quarantine_folder
+    assert not monitor.is_ignored(quarantine.with_name(quarantine.name + "-2024") / "x.docx")
+    state = monitor.config.queue_file.with_name("mst_recycle_state.json")
+    assert monitor.is_ignored(state.with_name(state.name + ".tmp"))
+
+
+def test_review3_recently_recycled_memory_is_trimmed(tmp_path, monkeypatch):
+    monitor, _ = make_monitor(tmp_path)
+    clock = [1000.0]
+    monkeypatch.setattr(file_monitor, "now_monotonic", lambda: clock[0])
+    for number in range(500):
+        monitor.recycled({"originalPath": str(tmp_path / f"f{number}.txt"), "size": 1, "deletedAt": "2026-10-28T00:00:00Z"})
+    assert len(monitor._recycled_recently) == 500
+    clock[0] += file_monitor.RECYCLED_MEMORY_SECONDS + 1
+    monitor._flush_pending_deletes()
+    assert monitor._recycled_recently == {}
+
+
+def test_review3_a_locked_record_is_read_again_later(tmp_path, monkeypatch):
+    bin_folder = tmp_path / "bin"
+    bin_folder.mkdir()
+    recycled = []
+    watcher = recycle_bin.RecycleBinWatcher([bin_folder], tmp_path / "state.json", recycled.append, lambda record, off: None)
+    watcher.start()
+    watcher.stop()  # no live notifications in this test: only poll()
+    index = bin_folder / "$ILOCK.txt"
+    index.write_bytes(index_record(str(tmp_path / "doc.txt"), 1, datetime.now(timezone.utc)))
+    real = Path.read_bytes
+    locked = [True]
+    monkeypatch.setattr(Path, "read_bytes", lambda self: (_ for _ in ()).throw(PermissionError("in use")) if locked[0] and self == index else real(self))
+    watcher.poll()
+    assert recycled == []
+    locked[0] = False
+    watcher.poll()  # same size and time as before: still read, because it was locked, not invalid
+    assert [r["originalPath"] for r in recycled] == [str(tmp_path / "doc.txt")]
+
+
+def test_review3_a_replugged_usb_recycle_bin_is_watched_again(tmp_path):
+    bin_folder = tmp_path / "usb" / "$Recycle.Bin" / "S-1-5-21"
+    bin_folder.mkdir(parents=True)
+    watcher = recycle_bin.RecycleBinWatcher([bin_folder], tmp_path / "state.json", lambda record: None, lambda record, off: None,
+                                            find_folders=lambda: [bin_folder] if bin_folder.exists() else [])
+    watcher.start()
+    try:
+        import shutil
+        shutil.rmtree(tmp_path / "usb")      # unplugged
+        watcher.refresh_folders()
+        assert watcher.folders == []
+        bin_folder.mkdir(parents=True)       # plugged back in
+        watcher.refresh_folders()
+        assert watcher.folders == [bin_folder]
+    finally:
+        watcher.stop()

@@ -126,6 +126,7 @@ With agent **1.3** or newer, every deletion shows **which PC**, **which file** (
 | **DELETED · Moved to Recycle Bin** | Deleted with File Explorer (Delete key). Reported from **any folder** on the drive, with the real delete time. Folders show **(folder)**. |
 | **DELETED · Deleted permanently** | Deleted without the Recycle Bin: Shift+Delete, a USB drive, a program or the command line. |
 | **DELETED · Removed from Recycle Bin** | The Recycle Bin was emptied (or the item was deleted there): it is now permanently gone. |
+| **DELETED** (no second line) | The agent could not tell how: Recycle Bin watching is turned off, or that drive's Recycle Bin could not be read. |
 
 Restoring a file from the Recycle Bin is not a deletion and is not reported as one. Items moved to the Recycle Bin
 while the agent was not running are reported when it starts again, with their real delete time.
