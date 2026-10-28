@@ -129,10 +129,17 @@ With agent **1.3** or newer, every deletion shows **which PC**, **which file** (
 
 | What you see on Detected Files | What happened on the PC |
 | --- | --- |
-| **DELETED · Moved to Recycle Bin** | Deleted with File Explorer (Delete key). Reported from **any folder** on the drive, with the real delete time. Folders show **(folder)**. |
+| **DELETED · Moved to Recycle Bin** | Deleted with File Explorer (Delete key). Reported from **any folder** on the drive, with the real delete time. A folder shows **FOLDER DELETED** instead of DELETED. |
 | **DELETED · Deleted permanently** | Deleted without the Recycle Bin: Shift+Delete, a USB drive, a program or the command line. |
 | **DELETED · Removed from Recycle Bin** | The Recycle Bin was emptied (or the item was deleted there): it is now permanently gone. |
 | **DELETED** (no second line) | The agent could not tell how: Recycle Bin watching is turned off, or that drive's Recycle Bin could not be read. |
+
+**Deleted folders (agent 1.4).** A deleted folder is reported like a deleted file, as **one row**:
+**FOLDER DELETED** with the same second line (Moved to Recycle Bin, Deleted permanently, Removed from Recycle Bin).
+This works for every way of deleting it: Delete key, Shift+Delete, emptying the Recycle Bin, a USB drive, the
+command line, and also for an empty folder. The files inside a deleted folder are not listed one by one; the folder's
+row stands for all of them (the agent's log shows how many files were inside). Choose **Activity > Deleted folders**
+to see only folders.
 
 Restoring a file from the Recycle Bin is not a deletion and is not reported as one. Items moved to the Recycle Bin
 while the agent was not running are reported when it starts again, with their real delete time.

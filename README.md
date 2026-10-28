@@ -225,6 +225,15 @@ Login lockout, idle session timeout, CSRF protection, strong passwords, security
 
 Real scanning with antivirus engines (Microsoft Defender, built into Windows, and/or ClamAV) on the lab PCs and on the MST server, VirusTotal, the hash blocklist and static file analysis. Five honest risk levels (**Safe, Medium, High, Unknown, Failed**) with an evidence-strength rating instead of invented percentages; a full Scan History table (search, filters, sorting, paging, CSV and report export); real uploads on the File Scanner page; automatic scans of new files; quarantine / release / delete on lab PCs; investigations; a dashboard built only from database data. Setup, rules and testing: **[SCANNER.md](SCANNER.md)**. Existing databases: run `database/migrations/phase13_scanner.sql` once after `phase12_security.sql`.
 
+## Phase 17 - Deleted folders
+
+Agent 1.4 reports a deleted folder like a deleted file: **one** event with `isFolder: true` and the same delete type
+(Recycle Bin, permanent, removed from the Recycle Bin), however it was deleted, including empty folders. Windows reports
+a deleted folder like a file and deletes its files one by one first, so the agent lists the folders under the watched
+folders once (up to 100,000, noise folders skipped) and holds the deletes inside a folder that is being deleted until
+the folder itself is gone; they are counted into the folder's event. Detected Files shows **FOLDER DELETED** and has an
+**Activity > Deleted folders** filter. No database change (it uses Phase 16's `is_folder`).
+
 ## Phase 16 - Deleted files: Recycle Bin, permanent deletes, more of the PC
 
 Agent 1.3 reports **how** a file was deleted (`file_events.delete_mode`): **Moved to Recycle Bin** (File Explorer's

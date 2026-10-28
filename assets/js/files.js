@@ -42,7 +42,9 @@ function fileActivityBadge(file) {
     created: '<span class="scan-result-status warning"><i class="fa-solid fa-file-circle-plus"></i> NEW FILE</span>',
     modified: '<span class="scan-result-status pending"><i class="fa-solid fa-pen"></i> MODIFIED</span>',
     renamed: '<span class="scan-result-status pending"><i class="fa-solid fa-i-cursor"></i> RENAMED</span>',
-    deleted: '<span class="severity-level unknown"><i class="fa-solid fa-trash-can"></i> DELETED</span>'
+    deleted: Number(file.isFolder)
+      ? '<span class="severity-level unknown"><i class="fa-solid fa-folder-minus"></i> FOLDER DELETED</span>'
+      : '<span class="severity-level unknown"><i class="fa-solid fa-trash-can"></i> DELETED</span>'
   }[file.eventType] || fileEsc(file.eventType);
   return badge + (fileDeleteHow(file) ? `<br>${fileDeleteHow(file)}` : '') + (fileOrigin(file) ? `<br>${fileOrigin(file)}` : '');
 }
@@ -56,7 +58,7 @@ const FILE_DELETE_MODES = {
 function fileDeleteHow(file) {
   const mode = FILE_DELETE_MODES[file.deleteMode];
   if (file.eventType !== 'deleted' || !mode) return '';
-  return `<span class="origin-tag" title="${fileEsc(mode[2])}"><i class="fa-solid ${mode[0]}"></i> ${fileEsc(mode[1])}${Number(file.isFolder) ? ' (folder)' : ''}</span>`;
+  return `<span class="origin-tag" title="${fileEsc(mode[2])}"><i class="fa-solid ${mode[0]}"></i> ${fileEsc(mode[1])}</span>`;
 }
 
 function fileStatusBadge(file) {
@@ -109,7 +111,7 @@ function renderFiles() {
   const since = days === 'all' ? null : (() => { const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - (Number(days) - 1)); return start; })();
   const rows = fileState.rows.filter((file) => `${file.fileName} ${file.filePath} ${file.previousPath || ''} ${file.computerHostname} ${file.computerDeviceId} ${file.sha256 || ''}`.toLowerCase().includes(query)
     && (computer === 'all' || String(file.computerId) === computer)
-    && (activity === 'all' || (activity === 'downloaded' ? fileDownloaded(file) : activity.startsWith('deleted:') ? file.eventType === 'deleted' && file.deleteMode === activity.slice(8) : file.eventType === activity))
+    && (activity === 'all' || (activity === 'downloaded' ? fileDownloaded(file) : activity === 'deleted:folder' ? file.eventType === 'deleted' && Number(file.isFolder) === 1 : activity.startsWith('deleted:') ? file.eventType === 'deleted' && file.deleteMode === activity.slice(8) : file.eventType === activity))
     && fileMatchesRisk(file, risk)
     && (classification === 'all' || fileClassification(file) === classification)
     && (!since || (mstParseDate(file.detectedAt) || 0) >= since));

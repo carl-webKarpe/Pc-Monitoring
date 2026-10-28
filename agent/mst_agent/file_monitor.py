@@ -11,6 +11,11 @@ How a file was deleted is reported as "deleteMode" (Phase 16):
   recycle_bin_removed  - removed from the Recycle Bin (emptied): now permanently gone
   (none)               - the agent cannot tell (Recycle Bin watching is off or that drive's bin is not readable)
 
+Deleted folders (Phase 17) are reported like deleted files, as ONE event with "isFolder": true, whichever way they were
+deleted. Windows reports a deleted folder like a file and deletes a folder's files one by one first, so the agent knows
+the folders under the watched folders (KNOWN_FOLDERS_LIMIT) and holds the deletes inside a folder that is being
+deleted until the folder itself is gone: they are counted into the folder's event instead of one row per file.
+
 How a file arrived is reported as "origin":
   local             - the file appeared; nothing shows it was downloaded
   browser_download  - a browser finished a download (its temporary .crdownload/.part file was renamed)
@@ -52,6 +57,9 @@ KNOWN_HASHES_LIMIT = 5000  # remembered file hashes, to report "modified" only w
 DELETE_GRACE_SECONDS = 3.0 # a delete waits this long for its Recycle Bin record before it is reported as permanent
 RECYCLED_MEMORY_SECONDS = 30.0
 DRIVE_CHECK_SECONDS = 10.0 # how often plugged-in USB drives are looked for
+FOLDER_HOLD_SECONDS = 30.0 # a delete inside a folder that is being deleted waits at most this long for the folder
+KNOWN_FOLDERS_LIMIT = 100_000  # folders remembered under the watched folders (to tell a deleted folder from a file)
+FILE_ATTRIBUTE_REPARSE_POINT = 0x400  # Windows junctions / links: never followed when the folders are listed
 AGENT_FOLDER = Path(__file__).resolve().parents[1]
 
 
@@ -65,6 +73,13 @@ def _inside(path: Path, folder: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+class _PendingDelete:
+    __slots__ = ("path", "detected_at", "report_after", "is_folder")
+
+    def __init__(self, path: Path, detected_at: str, report_after: float, is_folder: bool):
+        self.path, self.detected_at, self.report_after, self.is_folder = path, detected_at, report_after, is_folder
 
 
 def utc_now() -> str:
@@ -135,7 +150,10 @@ class FileMonitor:
         self._own_dir_keys = tuple(sorted({self._key(path) for path in spell(own_dirs)}))
         self._own_file_keys = tuple(sorted({self._key(path) for path in spell(own_files)}))
         self._recycle_lock = threading.Lock()  # one thread at a time looks at the Recycle Bin (housekeeping / stop)
-        self._pending_deletes: dict[str, tuple[Path, str, float]] = {}  # path key -> (path, detected at, report after)
+        self._pending_deletes: dict[str, _PendingDelete] = {}           # path key -> delete waiting for its label
+        self._delete_activity: dict[str, float] = {}                   # folder key -> last delete inside it
+        self._folders: set[str] = set()                                # keys of the folders under the watched folders
+        self._folders_full = False
         self._recycled_recently: dict[str, float] = {}                 # path key -> forget after
         self._removable: dict[str, object] = {}                        # USB drive root -> watchdog watch
         self._drives_lock = threading.Lock()                           # _removable changes while events are filtered
@@ -212,6 +230,7 @@ class FileMonitor:
         for worker in self._workers:
             worker.start()
         self._observer.start()
+        threading.Thread(target=self._learn_folders, args=(list(self.watched),), name="mst-folder-list", daemon=True).start()
         self._housekeeper = threading.Thread(target=self._housekeeping, name="mst-file-housekeeping", daemon=True)
         self._housekeeper.start()
         if self.config.watch_removable_drives:
@@ -272,14 +291,16 @@ class FileMonitor:
         if self.is_ignored(path) or self._is_suppressed(path):
             return
         with self._pending_lock:
+            self._folders.discard(self._key(path))  # a file now has this name (a folder of that name is gone)
+            self._add_folder(self._key(path.parent))
             if str(path) in self._pending:
                 return  # watchdog can fire several events for the same file while it is being written
             self._pending.add(str(path))
         self._work.put((kind, path, utc_now(), browser_download, previous))
 
-    def deleted(self, path: Path) -> None:
-        if self.is_ignored(path) or self._is_suppressed(path):
-            return
+    def deleted(self, path: Path, is_folder: bool = False) -> None:
+        if self.is_ignored(path) or self._is_suppressed(path) or path.name.lower() in self.config.ignore_folders:
+            return  # a noise folder itself (node_modules, .git, Temp) is not reported either
         with self._pending_lock:
             vanished_at = self._vanished.pop(str(path), None)
             if str(path) in self._pending or (vanished_at is not None and time.monotonic() - vanished_at < VANISHED_MEMORY_SECONDS):
@@ -292,7 +313,9 @@ class FileMonitor:
             if self._recently_recycled(key):
                 return  # already reported from its (or its folder's) Recycle Bin record
             # Wait briefly for a Recycle Bin record: then it is "moved to the Recycle Bin", otherwise "permanent".
-            self._pending_deletes[key] = (path, utc_now(), now_monotonic() + DELETE_GRACE_SECONDS)
+            now = now_monotonic()
+            self._pending_deletes[key] = _PendingDelete(path, utc_now(), now + DELETE_GRACE_SECONDS, is_folder or key in self._folders)
+            self._delete_activity[os.path.dirname(key)] = now
 
     def _recently_recycled(self, key: str) -> bool:
         """The path itself, or a folder above it, was just reported from a Recycle Bin record (call with the lock)."""
@@ -329,6 +352,7 @@ class FileMonitor:
             if record.get("isFolder"):  # files of a deleted folder are covered by the folder's record
                 for pending in [other for other in self._pending_deletes if other.startswith(key + os.sep)]:
                     self._pending_deletes.pop(pending, None)
+                self._forget_folder(key)
             self._recycled_recently[key] = now_monotonic() + RECYCLED_MEMORY_SECONDS
         self._emit("deleted", path, detected_at=record["deletedAt"], size=record.get("size"), delete_mode="recycle_bin", is_folder=bool(record.get("isFolder")))
 
@@ -343,27 +367,123 @@ class FileMonitor:
         now = now_monotonic()
         with self._pending_lock:
             self._recycled_recently = {key: until for key, until in self._recycled_recently.items() if until > now}
-            any_due = any(force or report_after <= now for _, _, report_after in self._pending_deletes.values())
+            self._delete_activity = {key: at for key, at in self._delete_activity.items() if now - at < DELETE_GRACE_SECONDS}
+            any_due = any(force or pending.report_after <= now for pending in self._pending_deletes.values())
         if not any_due:
             return
         # Before calling anything "permanent", read the Recycle Bin directly: a record whose notification is late
         # (many files deleted at once) or missing (the bin folder was only just created) is matched now.
         if poll and self._recycle is not None:
             with self._pending_lock:
-                due_paths = [path for path, _, report_after in self._pending_deletes.values() if force or report_after <= now]
+                due_paths = [pending.path for pending in self._pending_deletes.values() if force or pending.report_after <= now]
             try:
                 # New bin folders are looked for only when a due delete's drive has none watched yet.
                 self._recycle.poll(refresh=any(not self._recycle.covers(path) for path in due_paths))
             except Exception:
                 log.exception("Recycle Bin check failed")
         now = now_monotonic()
+        reports: list[tuple[_PendingDelete, int]] = []
         with self._pending_lock:
-            due = [key for key, (_, _, report_after) in self._pending_deletes.items() if force or report_after <= now]
-            items = [self._pending_deletes.pop(key) for key in due]
-            items = [item for key, item in zip(due, items) if not self._recently_recycled(key)]
-            self._recycled_recently = {key: until for key, until in self._recycled_recently.items() if until > now}
-        for path, detected_at, _ in items:
-            self._emit("deleted", path, detected_at=detected_at, delete_mode=self._delete_mode_when_no_record(path))
+            gone: dict[str, bool] = {}  # folder key -> no longer exists (checked once per pass)
+            due = [key for key, pending in self._pending_deletes.items()
+                   if force or (pending.report_after <= now and not self._waits_for_its_folder(key, pending, now, gone))]
+            # A pending delete with other pending deletes inside it was a folder (Windows does not say so).
+            parents = {os.path.dirname(key) for key in self._pending_deletes}
+            for key in sorted(due, key=len):  # a folder before the files inside it
+                pending = self._pending_deletes.pop(key, None)
+                if pending is None or self._recently_recycled(key):
+                    continue  # counted into a deleted folder above it, or already reported from the Recycle Bin
+                files = 0
+                if pending.is_folder or key in parents:
+                    pending.is_folder = True
+                    prefix = key + os.sep
+                    inside = [other for other in self._pending_deletes if other.startswith(prefix)]
+                    files = sum(1 for other in inside if not (self._pending_deletes[other].is_folder or other in parents))
+                    for other in inside:
+                        self._pending_deletes.pop(other)
+                    self._forget_folder(key)
+                reports.append((pending, files))
+        for pending, files in reports:
+            note = f"{files} file(s) inside" if pending.is_folder else None
+            self._emit("deleted", pending.path, detected_at=pending.detected_at, delete_mode=self._delete_mode_when_no_record(pending.path),
+                       is_folder=pending.is_folder, note=note)
+
+    def _waits_for_its_folder(self, key: str, pending: _PendingDelete, now: float, gone: dict[str, bool]) -> bool:
+        """A delete inside a folder that is being deleted (its folder is gone, or more deletes keep coming in it) waits
+        for that folder's own delete, so that it is reported once as a deleted folder. Call with the lock."""
+        if now - pending.report_after >= FOLDER_HOLD_SECONDS:
+            return False  # the folder's own delete never came (e.g. the folder was moved elsewhere): report it alone
+        parent = os.path.dirname(key)
+        if self._delete_activity.get(parent, -1e9) > now - DELETE_GRACE_SECONDS:
+            return True
+        if parent not in gone:
+            gone[parent] = not os.path.isdir(pending.path.parent)
+        return gone[parent]
+
+    # ---- folders (Phase 17) ----------------------------------------------------
+    def folder_created(self, path: Path) -> None:
+        if not self.is_ignored(path):
+            with self._pending_lock:
+                self._add_folder(self._key(path))
+
+    def folder_moved(self, source: Path, destination: Path) -> None:
+        with self._pending_lock:
+            old = self._key(source)
+            moved = [key for key in self._folders if key == old or key.startswith(old + os.sep)]
+            self._forget_folder(old)
+            if not self.is_ignored(destination):
+                new = self._key(destination)
+                for key in moved:
+                    self._add_folder(new + key[len(old):])
+
+    def _add_folder(self, key: str) -> None:
+        """Call with the lock."""
+        if key in self._folders:
+            return
+        if len(self._folders) >= KNOWN_FOLDERS_LIMIT:
+            if not self._folders_full:
+                self._folders_full = True
+                log.info("More than %d folders are watched: a deleted empty folder there may be reported as a file", KNOWN_FOLDERS_LIMIT)
+            return
+        self._folders.add(key)
+
+    def _forget_folder(self, key: str) -> None:
+        """The folder and the folders inside it are gone. Call with the lock."""
+        prefix = key + os.sep
+        self._folders = {other for other in self._folders if other != key and not other.startswith(prefix)}
+
+    def _learn_folders(self, roots: list[Path]) -> None:
+        """Lists the folders under the watched folders once (in the background), so a deleted folder is known to be a
+        folder even when it was empty. Noise folders (AppData, .git, ...), the agent's own folders and Windows
+        junctions are skipped."""
+        stack = [str(root) for root in roots]
+        while stack and not self._stop.is_set():
+            folder = stack.pop()
+            try:
+                with os.scandir(folder) as entries:
+                    found = []
+                    for entry in entries:
+                        try:
+                            if not entry.is_dir(follow_symlinks=False) or entry.is_symlink():
+                                continue
+                            if getattr(entry.stat(follow_symlinks=False), "st_file_attributes", 0) & FILE_ATTRIBUTE_REPARSE_POINT:
+                                continue
+                        except OSError:
+                            continue
+                        if entry.name.lower() in self.config.ignore_folders or entry.name.startswith(self.config.ignore_name_prefixes):
+                            continue
+                        key = self._key(entry.path)
+                        if self._is_own(key):
+                            continue
+                        found.append(key)
+            except OSError:
+                continue
+            with self._pending_lock:
+                for key in found:
+                    self._add_folder(key)
+                if self._folders_full:
+                    return
+            stack.extend(found)
 
     # ---- USB drives (Phase 16) ---------------------------------------------
     def _check_removable_drives(self) -> None:
@@ -380,6 +500,7 @@ class FileMonitor:
                 with self._drives_lock:
                     self._removable[root] = watch
                 log.info("USB drive %s plugged in: watching it", root)
+                threading.Thread(target=self._learn_folders, args=([Path(root)],), name="mst-folder-list", daemon=True).start()
         for root in [root for root in known if root not in current]:
             with self._drives_lock:
                 watch = self._removable.pop(root, None)
@@ -492,7 +613,9 @@ class _Handler(FileSystemEventHandler):
         self.monitor = monitor
 
     def on_created(self, event: FileSystemEvent) -> None:
-        if not event.is_directory:
+        if event.is_directory:
+            self.monitor.folder_created(Path(event.src_path))
+        else:
             self.monitor.created(Path(event.src_path))
 
     def on_modified(self, event: FileSystemEvent) -> None:
@@ -500,13 +623,17 @@ class _Handler(FileSystemEventHandler):
             self.monitor.modified(Path(event.src_path))
 
     def on_deleted(self, event: FileSystemEvent) -> None:
-        if not event.is_directory:
-            self.monitor.deleted(Path(event.src_path))
+        # On Windows every delete arrives as a file delete; the monitor tells folders apart itself.
+        self.monitor.deleted(Path(event.src_path), is_folder=event.is_directory)
 
     def on_moved(self, event: FileSystemEvent) -> None:
-        if event.is_directory:
-            return
         source, destination = Path(event.src_path), Path(event.dest_path)
+        if event.is_directory:
+            if self.monitor.is_ignored(destination) and not self.monitor.is_ignored(source):
+                self.monitor.deleted(source, is_folder=True)  # e.g. into D:\$Recycle.Bin on a watched drive
+            else:
+                self.monitor.folder_moved(source, destination)
+            return
         if source.suffix.lower() in BROWSER_TEMP_EXTENSIONS:
             # Browsers download to "file.crdownload" / "file.part" and rename it when the download is complete.
             self.monitor.created(destination, browser_download=True)

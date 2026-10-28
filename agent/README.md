@@ -11,6 +11,14 @@ New files are scanned on this PC (antivirus engines + static analysis) automatic
 
 It does **not** upload file contents, record keystrokes, capture the screen, control the computer, or hide itself. It runs as a normal visible program and writes everything it does to `mst_agent.log`.
 
+## Deleted folders (Phase 17, agent 1.4)
+
+A deleted folder is one `deleted` event with `isFolder: true` (any delete type, also when it was empty). Windows sends a
+plain delete for a folder and for each file inside it, so the agent knows the folders below the watched folders (listed
+once in the background, max 100,000) and holds a delete inside a folder that is disappearing (its folder is gone, or
+more deletes keep coming in it) for up to 30 seconds until the folder's own delete arrives; those files are counted
+into the folder's event ("N file(s) inside" in the log) instead of being reported one by one.
+
 ## Deleted files (Phase 16, agent 1.3)
 
 Deleted files are reported with `deleteMode`: `recycle_bin` (moved to the Recycle Bin: the agent reads the

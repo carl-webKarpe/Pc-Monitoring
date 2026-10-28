@@ -1094,3 +1094,137 @@ def test_import_keeps_the_old_config_as_backup(tmp_path):
     source.write_text(json.dumps(one_pc_config()))
     import_config(source, config_path)
     assert json.loads((tmp_path / "config.json.bak").read_text()) == {"old": True}
+
+
+# --- Phase 17: deleted folders are reported like deleted files (one event, "isFolder": true) ---
+
+class FakeClock:
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+
+def windows_style_delete(monitor, clock, path, at):
+    """Windows reports every delete as a file delete (watchdog cannot tell a folder apart once it is gone)."""
+    clock.now = at
+    monitor.deleted(path)
+    monitor._flush_pending_deletes(poll=False)
+
+
+def test_folder_deleted_file_by_file_is_one_folder_event(tmp_path, monkeypatch):
+    import shutil
+    clock = FakeClock()
+    monkeypatch.setattr(file_monitor, "now_monotonic", clock)
+    monitor, events = make_monitor(tmp_path, watch_recycle_bin=False)
+    project = tmp_path / "watched" / "Project"
+    (project / "sub").mkdir(parents=True)
+    files = [project / f"f{n}.txt" for n in range(4)] + [project / "sub" / "deep.txt"]
+    for file in files:
+        file.write_text("x")
+    shutil.rmtree(project)
+    # A slow Shift+Delete: the files go one by one over 9 seconds (longer than the 3 s grace), then the folders.
+    for number, file in enumerate(files):
+        windows_style_delete(monitor, clock, file, 1000 + number * 2)
+    windows_style_delete(monitor, clock, project / "sub", 1009)
+    windows_style_delete(monitor, clock, project, 1009.5)
+    assert events == []  # nothing reported per file while the folder was being deleted
+    clock.now = 1013
+    monitor._flush_pending_deletes(poll=False)
+    assert [(e["fileName"], e["isFolder"], e["type"]) for e in events] == [("Project", True, "deleted")]
+
+
+def test_empty_folder_known_from_the_folder_list_is_reported_as_folder(tmp_path, monkeypatch):
+    clock = FakeClock()
+    monkeypatch.setattr(file_monitor, "now_monotonic", clock)
+    monitor, events = make_monitor(tmp_path, watch_recycle_bin=False)
+    empty = tmp_path / "watched" / "Empty folder"
+    (empty / "inner").mkdir(parents=True)
+    (tmp_path / "watched" / "AppData" / "Noise").mkdir(parents=True)
+    monitor._learn_folders([tmp_path / "watched"])
+    assert monitor._key(empty / "inner") in monitor._folders
+    assert monitor._key(tmp_path / "watched" / "AppData" / "Noise") not in monitor._folders
+    (empty / "inner").rmdir()
+    empty.rmdir()
+    windows_style_delete(monitor, clock, empty / "inner", 1000)
+    windows_style_delete(monitor, clock, empty, 1000.2)
+    clock.now = 1004
+    monitor._flush_pending_deletes(poll=False)
+    assert [(e["fileName"], e["isFolder"]) for e in events] == [("Empty folder", True)]
+    assert monitor._key(empty) not in monitor._folders  # forgotten once deleted
+
+
+def test_single_file_delete_is_still_a_file_and_not_held(tmp_path, monkeypatch):
+    clock = FakeClock()
+    monkeypatch.setattr(file_monitor, "now_monotonic", clock)
+    monitor, events = make_monitor(tmp_path, watch_recycle_bin=False)
+    target = tmp_path / "watched" / "report.docx"
+    windows_style_delete(monitor, clock, target, 1000)
+    clock.now = 1003.1
+    monitor._flush_pending_deletes(poll=False)
+    assert [(e["fileName"], e["isFolder"]) for e in events] == [("report.docx", False)]
+
+
+def test_file_in_vanished_folder_is_reported_alone_when_the_folder_delete_never_comes(tmp_path, monkeypatch):
+    clock = FakeClock()
+    monkeypatch.setattr(file_monitor, "now_monotonic", clock)
+    monitor, events = make_monitor(tmp_path, watch_recycle_bin=False)
+    windows_style_delete(monitor, clock, tmp_path / "watched" / "Moved away" / "a.txt", 1000)
+    clock.now = 1010
+    monitor._flush_pending_deletes(poll=False)
+    assert events == []  # its folder is gone: waiting for the folder's own delete
+    clock.now = 1000 + file_monitor.DELETE_GRACE_SECONDS + file_monitor.FOLDER_HOLD_SECONDS
+    monitor._flush_pending_deletes(poll=False)
+    assert [(e["fileName"], e["isFolder"]) for e in events] == [("a.txt", False)]
+
+
+def test_folder_moved_to_the_recycle_bin_is_one_recycle_bin_folder_event(tmp_path, monkeypatch):
+    bin_folder = tmp_path / "bin"
+    bin_folder.mkdir()
+    monkeypatch.setattr(file_monitor, "default_recycle_folders", lambda drives: [bin_folder])
+    monitor, events = make_monitor(tmp_path)
+    folder = tmp_path / "watched" / "Photos"
+    folder.mkdir()
+    (folder / "a.jpg").write_bytes(b"1")
+    monitor.start()
+    try:
+        assert wait_until(lambda: monitor._key(folder) in monitor._folders)
+        (bin_folder / "$RPHOTOS").mkdir()
+        (folder / "a.jpg").rename(bin_folder / "$RPHOTOS" / "a.jpg")
+        folder.rmdir()
+        (bin_folder / "$IPHOTOS").write_bytes(index_record(str(folder), 1, datetime.now(timezone.utc)))
+        assert wait_until(lambda: any(e["type"] == "deleted" for e in events))
+        time.sleep(file_monitor.DELETE_GRACE_SECONDS + 1)
+    finally:
+        monitor.stop()
+    deleted = [(e["fileName"], e["isFolder"], e["deleteMode"]) for e in events if e["type"] == "deleted"]
+    assert deleted == [("Photos", True, "recycle_bin")]
+
+
+def test_folder_delete_through_the_real_watcher(tmp_path):
+    import shutil
+    monitor, events = make_monitor(tmp_path, watch_recycle_bin=False)
+    tree = tmp_path / "watched" / "Thesis"
+    (tree / "chapters").mkdir(parents=True)
+    for name in ("one.docx", "two.docx"):
+        (tree / "chapters" / name).write_text("x")
+    monitor.start()
+    try:
+        time.sleep(1)
+        shutil.rmtree(tree)
+        assert wait_until(lambda: any(e["type"] == "deleted" for e in events), timeout=15)
+        time.sleep(1)
+    finally:
+        monitor.stop()
+    assert [(e["fileName"], e["isFolder"]) for e in events if e["type"] == "deleted"] == [("Thesis", True)]
+
+
+def test_noise_folder_delete_is_not_reported(tmp_path, monkeypatch):
+    clock = FakeClock()
+    monkeypatch.setattr(file_monitor, "now_monotonic", clock)
+    monitor, events = make_monitor(tmp_path, watch_recycle_bin=False)
+    windows_style_delete(monitor, clock, tmp_path / "watched" / "proj" / ".git", 1000)
+    clock.now = 1010
+    monitor._flush_pending_deletes(poll=False)
+    assert events == []

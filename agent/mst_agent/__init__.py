@@ -1,3 +1,3 @@
 """MST Monitoring Agent: reports authorized lab-PC status and configured file activity to the MST server."""
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
