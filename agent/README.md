@@ -36,6 +36,9 @@ Each PC gets its own device ID and token and **finds the MST server on the netwo
 server's IP address changes. Before the agent sends its key or token to a computer it found, that computer must prove
 it is the real MST server (an HMAC of a random nonce, keyed with the hash only the server stores).
 
+One PC needs **no key**: download its config.json from **Add Computers > One PC** and put it in this folder (or leave it
+in Downloads); `setup-agent.bat` finds it (`run_agent.py --import-config`).
+
 Commands: `run_agent.py --enroll KEY [--server 192.168.0.61]` (enroll and write config.json) and
 `run_agent.py --find-server` (search the network now). Set `"auto_discover": false` in config.json to turn the search off.
 

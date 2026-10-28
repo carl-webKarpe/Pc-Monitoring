@@ -30,14 +30,15 @@ Two windows open (the API and the website; keep them open) and the browser opens
 
 ## Part 2A: Register ONE PC and get its token (server)
 
-Use this when you add PCs one at a time.
+Use this when you add PCs one at a time. **No enrollment key is needed.**
 
 1. Open **Computers** and click **Add Computers**. The **One PC** tab is open.
 2. Type a name (for example `LAB-PC-07` or `Front desk laptop`) and click **Register Computer**.
 3. The PC's **device ID** (for example `MST-PC-007`) and **device token** appear. The token is shown **only once**.
 4. Click **Download config.json**. This file already contains the server address, the device ID and the token.
-5. Put that **config.json** inside the `agent` folder you copy to the PC (Part 3). If your browser saved it as
-   `config (1).json`, rename it to exactly `config.json`.
+5. Put that **config.json** inside the `agent` folder you copy to the PC (Part 3). `setup-agent.bat` uses it and
+   does not ask for a key. It also finds it when it is named `config (1).json`, or when it is still in that PC's
+   **Downloads** folder (the newest one is used; the old config.json is kept as `config.json.bak`).
 
 The PC shows on the Computers list right away as **OFFLINE** until its agent runs. It keeps the name you typed;
 its Windows computer name is shown under it once it connects.
@@ -68,10 +69,10 @@ Use this to add a whole lab with one code.
 **Once on the server, prepare a USB drive:**
 
 1. Copy the folder `C:\xampp1\htdocs\monitoring\agent` to the USB drive.
-2. Put the downloaded file inside that `agent` folder on the USB drive: **config.json** (one PC, Part 2A) or
-   **enrollment.txt** (many PCs, Part 2B).
-3. Inside the copied folder, delete these if they exist (they belong to the server): `config.json`, `.venv`,
+2. Inside the copied folder, delete these if they exist (they belong to the server): `config.json`, `.venv`,
    `quarantine`, `mst_agent.lock`, `mst_agent.log`, `mst_agent_queue.db`.
+3. Then put the downloaded file inside that `agent` folder on the USB drive: **config.json** (one PC, Part 2A) or
+   **enrollment.txt** (many PCs, Part 2B).
 
 **On each lab PC:**
 
@@ -84,7 +85,12 @@ Use this to add a whole lab with one code.
    - asks whether the agent should start automatically when this Windows user signs in (**Y** is recommended).
 4. Wait for **Setup finished**.
 
-No IP address and no token to type. If neither file is there, setup asks you to type an enrollment key.
+No IP address and no token to type. If neither file is there (not in `C:\MST\agent` and no config.json in
+Downloads), setup explains both ways and asks for an enrollment key; press **Enter** to stop instead.
+
+If the PC has its config.json but the server does not answer, setup now says so and asks **R** (try again),
+**K** (use an enrollment key instead) or **S** (skip). Check that `start-server.bat` is running on the server, that
+both are on the same network, and that port 8081 is allowed in the server's firewall.
 
 ---
 

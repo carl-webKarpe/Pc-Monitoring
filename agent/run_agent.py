@@ -6,6 +6,8 @@
     python run_agent.py --enroll KEY    add this PC with an enrollment key (Computers > Add Computers); finds
                                         the server on the network, or give it: --server 192.168.0.61
     python run_agent.py --find-server   search the network for the MST server and save its new address
+    python run_agent.py --import-config use the config.json downloaded from Computers > Add Computers > One PC
+                                        (found in this folder or in Downloads; no enrollment key needed)
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from mst_agent import VERSION
 from mst_agent.agent import Agent
 from mst_agent.config import ConfigError, load_config
 from mst_agent.enroll import EnrollError, enroll
+from mst_agent.setup_helper import downloads_folder, find_downloaded_config, import_config, is_enrolled
 from mst_agent.single_instance import AlreadyRunning, SingleInstance
 from mst_agent.system_info import heartbeat_payload
 
@@ -38,6 +41,25 @@ def setup_logging(log_file: Path) -> None:
     logging.basicConfig(level=logging.INFO, handlers=[console, file_handler])
 
 
+def import_downloaded_config(config_path: Path, source: str) -> int:
+    found = Path(source) if source else find_downloaded_config(config_path.parent, downloads_folder())
+    if found is None or not found.is_file():
+        print("No config.json from the MST website was found in this folder or in Downloads.")
+        return 1
+    if found.resolve() == config_path.resolve():
+        return 0 if is_enrolled(config_path) else 1
+    try:
+        data = import_config(found, config_path)
+    except OSError as error:
+        print(f"Could not copy {found} to {config_path}: {error}", file=sys.stderr)
+        return 1
+    if not is_enrolled(config_path):
+        print(f"{found} is not a config.json from Add Computers > One PC (no device token).", file=sys.stderr)
+        return 1
+    print(f"Using {found} (device {data['device_id']}, server {data['server_url']}).")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=f"MST Monitoring Agent {VERSION}")
     parser.add_argument("--config", default=str(Path(__file__).with_name("config.json")), help="path to config.json")
@@ -47,7 +69,15 @@ def main() -> int:
     parser.add_argument("--server", help="with --enroll: the MST server address (default: search this network)")
     parser.add_argument("--data-dir", help="with --enroll: folder for the queue, log and quarantine (e.g. %%LOCALAPPDATA%%\\MST-Agent)")
     parser.add_argument("--find-server", action="store_true", help="search the network for the MST server and update config.json")
+    parser.add_argument("--import-config", nargs="?", const="", metavar="FILE",
+                        help="use a config.json downloaded from Add Computers > One PC (default: search this folder and Downloads)")
+    parser.add_argument("--is-enrolled", action="store_true", help="exit 0 when config.json has this PC's device token")
     args = parser.parse_args()
+
+    if args.is_enrolled:
+        return 0 if is_enrolled(Path(args.config)) else 1
+    if args.import_config is not None:
+        return import_downloaded_config(Path(args.config), args.import_config)
 
     if args.enroll:
         print("Enrolling this PC" + (f" with the MST server {args.server}..." if args.server else "; searching this network for the MST server..."))

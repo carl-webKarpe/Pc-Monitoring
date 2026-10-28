@@ -1030,3 +1030,67 @@ def test_review3_a_replugged_usb_recycle_bin_is_watched_again(tmp_path):
         assert watcher.folders == [bin_folder]
     finally:
         watcher.stop()
+
+
+# --- One PC without an enrollment key: setup-agent.bat uses the config.json downloaded from the website ---
+
+def one_pc_config(device="MST-PC-012", token="a" * 64):
+    return {"server_url": "http://192.168.1.87:8081/api", "device_id": device, "device_token": token,
+            "watch_folders": ["{Downloads}"]}
+
+
+def test_one_pc_config_is_found_in_downloads_and_imported(tmp_path):
+    import os
+    import subprocess
+    agent_dir, downloads = tmp_path / "agent", tmp_path / "home" / "Downloads"
+    agent_dir.mkdir()
+    downloads.mkdir(parents=True)
+    (agent_dir / "config.example.json").write_text(json.dumps({"device_token": "PASTE_TOKEN"}))
+    old = downloads / "config.json"
+    old.write_text(json.dumps(one_pc_config("MST-PC-001")))
+    os.utime(old, (time.time() - 3600,) * 2)
+    (downloads / "config (1).json").write_text(json.dumps(one_pc_config("MST-PC-012")))
+    (downloads / "config (2).json").write_text("{not json")
+    (downloads / "notes.json").write_text(json.dumps(one_pc_config("MST-PC-099")))
+
+    from mst_agent.setup_helper import find_downloaded_config, import_config, is_enrolled
+    config_path = agent_dir / "config.json"
+    assert not is_enrolled(config_path)
+    found = find_downloaded_config(agent_dir, downloads)
+    assert found == downloads / "config (1).json"
+    import_config(found, config_path)
+    assert is_enrolled(config_path) and json.loads(config_path.read_text())["device_id"] == "MST-PC-012"
+
+    # The same through run_agent.py, as setup-agent.bat calls it (USERPROFILE points at the fake home).
+    config_path.unlink()
+    run = Path(__file__).resolve().parents[1] / "run_agent.py"
+    env = dict(os.environ, USERPROFILE=str(tmp_path / "home"), HOME=str(tmp_path / "home"))
+    cmd = [sys.executable, str(run), "--config", str(config_path)]
+    assert subprocess.run(cmd + ["--is-enrolled"], env=env).returncode == 1
+    result = subprocess.run(cmd + ["--import-config"], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert "MST-PC-012" in result.stdout
+    assert subprocess.run(cmd + ["--is-enrolled"], env=env).returncode == 0
+
+
+def test_one_pc_config_renamed_in_agent_folder_and_placeholders_are_ignored(tmp_path):
+    from mst_agent.setup_helper import find_downloaded_config, is_enrolled_config
+    (tmp_path / "config.json").write_text(json.dumps({"device_token": "PASTE_YOUR_TOKEN_HERE", "device_id": "x",
+                                                       "server_url": "http://x/api"}))
+    (tmp_path / "config.example.json").write_text(json.dumps(one_pc_config()))
+    assert find_downloaded_config(tmp_path, None) is None  # config.json / config.example.json are never "downloads"
+    (tmp_path / "config.json.json").write_text(json.dumps(one_pc_config("MST-PC-013")))
+    assert find_downloaded_config(tmp_path, tmp_path / "missing") == tmp_path / "config.json.json"
+    assert not is_enrolled_config({"device_token": "short", "device_id": "x", "server_url": "http://x/api"})
+    assert not is_enrolled_config({"device_token": "b" * 64, "device_id": "", "server_url": "http://x/api"})
+    assert not is_enrolled_config({"device_token": "b" * 64, "device_id": "x", "server_url": "x/api"})
+
+
+def test_import_keeps_the_old_config_as_backup(tmp_path):
+    from mst_agent.setup_helper import import_config
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"old": true}')
+    source = tmp_path / "config (1).json"
+    source.write_text(json.dumps(one_pc_config()))
+    import_config(source, config_path)
+    assert json.loads((tmp_path / "config.json.bak").read_text()) == {"old": True}

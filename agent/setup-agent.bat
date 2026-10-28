@@ -45,14 +45,26 @@ if exist "wheels\" (
 )
 if errorlevel 1 (echo Installing the packages failed. Check the internet connection, then run setup-agent.bat again. & pause & exit /b 1)
 
-rem 3. Enroll (skipped when this PC already has a device token)
-"%PY%" -c "import json,sys; t=json.load(open('config.json')).get('device_token',''); sys.exit(0 if len(t)>=32 and 'PASTE' not in t else 1)" >nul 2>nul
-if not errorlevel 1 (
-  echo [2/3] This PC is already enrolled. Checking the connection...
-  "%PY%" run_agent.py --find-server && goto autostart
-  choice /c YN /m "The MST server did not accept this PC. Enroll it again with a key"
-  if errorlevel 2 goto autostart
-)
+rem 3. Enroll. One PC: the config.json downloaded from Add Computers > One PC is enough (no key).
+rem Many PCs: an enrollment key (enrollment.txt or typed).
+"%PY%" run_agent.py --is-enrolled >nul 2>nul && goto checkconn
+"%PY%" run_agent.py --import-config && goto checkconn
+goto needkey
+
+:checkconn
+echo [2/3] This PC has its config.json. Checking the connection to the MST server...
+"%PY%" run_agent.py --find-server && goto autostart
+echo.
+echo The MST server could not be reached, or it did not accept this PC's token.
+echo  - On the server: start-server.bat must be running, and port 8081 allowed in the firewall.
+echo  - This PC must be on the same network (LAN cable or the same Wi-Fi) as the server.
+echo  - If the PC was deleted on the website or got a New Token, download its config.json again.
+choice /c RKS /m "R = try again, K = enroll with a key instead, S = skip"
+if errorlevel 3 goto autostart
+if errorlevel 2 goto needkey
+goto checkconn
+
+:needkey
 set KEY=
 set SERVER=
 if exist enrollment.txt (
@@ -61,7 +73,20 @@ if exist enrollment.txt (
     if /i "%%a"=="SERVER" set SERVER=%%b
   )
 )
-if not defined KEY set /p KEY=Enrollment key (from Computers ^> Add Computers): 
+if defined KEY goto haskey
+echo.
+echo This PC has no config.json from the MST website yet.
+echo  ONE PC  : website - Computers - Add Computers - One PC - Register Computer - Download config.json.
+echo            Put config.json in this folder or leave it in Downloads, then run setup-agent.bat again.
+echo  MANY PCs: type the enrollment key from the "Many PCs (enrollment key)" tab.
+echo.
+set /p KEY=Enrollment key (or press Enter to stop): 
+if not defined KEY (
+  echo Setup stopped. Get config.json or a key from the MST website, then run setup-agent.bat again.
+  pause
+  exit /b 1
+)
+:haskey
 echo [2/3] Enrolling this PC...
 set ENROLLED=
 if defined SERVER (
@@ -73,7 +98,7 @@ if not defined ENROLLED (
   echo.
   echo Enrollment failed - see the message above.
   echo Check that this PC is on the same network as the MST server, that the API is running
-  echo (start-server.bat on the server) and that the key is still active.
+  echo ^(start-server.bat on the server^) and that the key is still active.
   pause
   exit /b 1
 )

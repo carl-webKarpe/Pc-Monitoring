@@ -41,7 +41,7 @@
         <div class="enroll-tabs" role="tablist"><button class="enroll-tab active" role="tab" data-enroll-tab="one" aria-selected="true">One PC</button><button class="enroll-tab" role="tab" data-enroll-tab="many" aria-selected="false">Many PCs (enrollment key)</button></div>
 
         <section class="enroll-panel" id="enrollPanelOne">
-          <p class="file-note">Register one PC and get its <strong>device token</strong>. Download the ready <strong>config.json</strong> and put it in the agent folder on that PC.</p>
+          <p class="file-note">Adding just one PC? No enrollment key needed. Register it here and get its <strong>device token</strong>. Download the ready <strong>config.json</strong> and put it in the agent folder on that PC.</p>
           <form id="registerForm" class="enroll-form one">
             <label><span>Computer name</span><input class="confirm-input" id="registerName" maxlength="120" placeholder="LAB-PC-07 or Front desk laptop" /></label>
             <button class="btn-primary" type="submit" id="registerCreate"><i class="fa-solid fa-plus"></i> Register Computer</button>
@@ -54,7 +54,7 @@
             <div class="threat-actions"><button class="btn-secondary" id="registerCopy" type="button"><i class="fa-solid fa-copy"></i> Copy Token</button><button class="btn-primary" id="registerDownload" type="button"><i class="fa-solid fa-download"></i> Download config.json</button></div>
             <ol class="enroll-steps">
               <li>Copy the <strong>agent</strong> folder to a USB drive and put the downloaded <strong>config.json</strong> inside it.</li>
-              <li>On the PC: copy the folder to <strong>C:\MST\agent</strong> and double-click <strong>setup-agent.bat</strong>.</li>
+              <li>On the PC: copy the folder to <strong>C:\MST\agent</strong> and double-click <strong>setup-agent.bat</strong>. No enrollment key is needed: it uses this config.json (also when it is still in that PC's Downloads folder).</li>
               <li>The PC shows <strong>ONLINE</strong> on this page within a minute, with the name you typed (its Windows name is shown under it).</li>
             </ol>
           </section>
