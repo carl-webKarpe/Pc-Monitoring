@@ -6,6 +6,9 @@ const MST_DEMO_ACCOUNTS = [
     'admin' => ['id' => 2, 'username' => 'admin', 'name' => 'Administrator', 'role' => 'Admin'],
 ];
 
+// This lab's MST server: the admin laptop on the LAN cable (Ethernet). Used in config.json / enrollment.txt downloads.
+const MST_LAB_API_URL = 'http://192.168.0.224:8081/api';
+
 function mst_env(): array
 {
     static $values;
@@ -55,8 +58,13 @@ function mst_config(): array
         // VirusTotal accepts direct uploads up to 32 MB; PHP's upload_max_filesize/post_max_size must allow it too.
         // Super Admin sign-in must be approved on a paired phone by scanning a QR code (on | off).
         'superadmin_phone_login' => strtolower(mst_env_value('SUPERADMIN_PHONE_LOGIN', 'on')) !== 'off',
-        // Address phones use to reach this API, e.g. http://192.168.1.10:8081/api (empty = detected automatically).
-        'public_api_url' => rtrim(mst_env_value('PUBLIC_API_URL', ''), '/'),
+        // Address lab PCs and phones use to reach this API. .env PUBLIC_API_URL overrides it; set it there to empty
+        // ("auto") to detect this laptop's address automatically instead.
+        'public_api_url' => (static function (): string {
+            $url = rtrim(mst_env_value('PUBLIC_API_URL', ''), '/');
+            if (strtolower($url) === 'auto') return '';
+            return $url !== '' ? $url : MST_LAB_API_URL;
+        })(),
         'max_upload_mb' => max(1, min(32, (int)mst_env_value('MAX_UPLOAD_MB', '32'))),
     ];
 }

@@ -1228,3 +1228,23 @@ def test_noise_folder_delete_is_not_reported(tmp_path, monkeypatch):
     clock.now = 1010
     monitor._flush_pending_deletes(poll=False)
     assert events == []
+
+
+def test_the_lab_server_address_is_tried_first(monkeypatch):
+    tried = []
+    monkeypatch.setattr(discovery, "local_networks", lambda: [discovery.ipaddress.IPv4Network("10.1.2.0/30")])
+    monkeypatch.setattr(discovery, "_port_open", lambda host, port, timeout: tried.append(host) or host == discovery.LAB_SERVER_IP)
+    monkeypatch.setattr(discovery, "verify_server", lambda url, *args, **kwargs: True)
+    assert discovery.LAB_SERVER_IP == "192.168.0.224"
+    assert discovery.find_server(TOKEN, "MST-PC-002") == "http://192.168.0.224:8081/api"
+    assert tried[0] == "192.168.0.224"
+
+
+def test_rediscovery_right_after_boot(tmp_path, monkeypatch):
+    from mst_agent import agent as agent_module
+    agent = agent_module.Agent(load_config(write_config(tmp_path)))
+    agent._failed_heartbeats = 3
+    monkeypatch.setattr(agent_module.time, "monotonic", lambda: 12.0)  # the PC started 12 seconds ago
+    monkeypatch.setattr(agent_module, "find_server", lambda *args, **kwargs: "http://10.9.8.7:8081/api")
+    assert agent.rediscover()
+    agent.outbox.close()

@@ -1,5 +1,5 @@
 {
-  "server_url": "http://192.168.1.10:8081/api",
+  "server_url": "http://192.168.0.224:8081/api",
   "device_id": "MST-PC-002",
   "device_token": "PASTE-THE-TOKEN-FROM-register-agent.php",
   "heartbeat_interval_seconds": 30,

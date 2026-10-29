@@ -43,7 +43,7 @@ class Agent:
         self._engines: list[dict] | None = None
         self._engines_checked = 0.0
         self._failed_heartbeats = 0
-        self._last_discovery = 0.0
+        self._last_discovery: float | None = None  # not 0.0: right after boot the monotonic clock is near 0
 
     def engines(self) -> list[dict]:
         """Antivirus engines installed on this PC (checked at start and then hourly)."""
@@ -176,7 +176,7 @@ class Agent:
         it and saves the new address in config.json. Returns True when the server address was updated."""
         if not self.config.auto_discover or self.offline:
             return False
-        due = self._failed_heartbeats >= DISCOVERY_AFTER_FAILURES and time.monotonic() - self._last_discovery > DISCOVERY_INTERVAL_SECONDS
+        due = self._failed_heartbeats >= DISCOVERY_AFTER_FAILURES and (self._last_discovery is None or time.monotonic() - self._last_discovery > DISCOVERY_INTERVAL_SECONDS)
         if not (force or due):
             return False
         self._last_discovery = time.monotonic()

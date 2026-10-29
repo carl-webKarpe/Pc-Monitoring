@@ -28,6 +28,11 @@ Two windows open (the API and the website; keep them open) and the browser opens
 
 ---
 
+**This lab's server address is `192.168.0.224`** (the MST laptop on the LAN cable). It is set in the code: downloaded
+config.json and enrollment.txt files use `http://192.168.0.224:8081/api`, and agents try that address first. If the
+laptop gets another address, set `PUBLIC_API_URL=http://<new IP>:8081/api` in `.env` (or `PUBLIC_API_URL=auto`) and
+restart start-server.bat; agents also search the network by themselves.
+
 ## Part 2A: Register ONE PC and get its token (server)
 
 Use this when you add PCs one at a time. **No enrollment key is needed.**

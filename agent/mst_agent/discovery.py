@@ -26,6 +26,9 @@ from . import VERSION
 log = logging.getLogger("mst_agent.discovery")
 
 DEFAULT_PORT = 8081
+# This lab's MST server (the admin laptop on the LAN cable). It is tried first; the rest of the network is still
+# searched when the laptop gets another address. The server must prove itself (verify_server) like any other.
+LAB_SERVER_IP = "192.168.0.224"
 KEY_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
 MAX_HOSTS_PER_NETWORK = 1022  # a /22; larger networks are searched in the /24 around this PC's own address
 
@@ -94,7 +97,10 @@ def _port_open(host: str, port: int, timeout: float) -> bool:
 def find_server(secret: str, device_id: str | None = None, port: int = DEFAULT_PORT, scheme: str = "http",
                 hints: tuple[str, ...] = (), timeout: float = 0.5, verify=True) -> str | None:
     """Searches the local network(s) for the MST server and returns its API URL (http://ip:port/api) or None."""
-    hosts: list[str] = [hint for hint in hints if hint]
+    hosts: list[str] = []
+    for hint in (*hints, LAB_SERVER_IP):
+        if hint and hint not in hosts:
+            hosts.append(hint)
     for network in local_networks():
         hosts += [str(host) for host in network.hosts() if str(host) not in hosts]
     if not hosts:

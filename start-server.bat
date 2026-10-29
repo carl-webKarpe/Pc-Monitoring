@@ -9,6 +9,7 @@ start "MST website - port 8000 (keep open)" cmd /k php -S localhost:8000 router.
 echo MST is running.
 echo   Website : http://localhost:8000/login.html
 echo   API     : http://localhost:8081/api
+echo   Lab PCs : http://192.168.0.224:8081/api  (this laptop on the LAN cable)
 echo.
 echo This laptop's network addresses (lab PCs find the server by themselves; you only need these
 echo if a PC asks for the server address):
