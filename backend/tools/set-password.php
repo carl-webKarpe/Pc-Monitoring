@@ -19,7 +19,10 @@ if ($login === '') { fwrite(STDERR, "Usage: php backend/tools/set-password.php <
 try {
     $account = MySQLRepository::findForLogin($login);
 } catch (Throwable $exception) {
-    fwrite(STDERR, 'Could not reach the database: ' . $exception->getMessage() . "\n"); exit(1);
+    $config = mst_config();
+    fwrite(STDERR, "Could not read the accounts in database \"{$config['db_name']}\" ({$config['db_host']}:{$config['db_port']}; set by DB_DATABASE in .env): " . $exception->getMessage() . "\n");
+    if ($exception instanceof PDOException && $exception->getCode() === '42S22') fwrite(STDERR, "Its users table is not an MST users table (or is very old). Check DB_DATABASE in .env, or run database/migrations/repair_all.sql.\n");
+    exit(1);
 }
 if (!$account) {
     // Say where it looked and what is there: the usual cause is .env DB_DATABASE naming another database.

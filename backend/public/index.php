@@ -40,7 +40,7 @@ set_exception_handler(static function (Throwable $exception): never {
     if ($exception instanceof PDOException && in_array($exception->getCode(), ['42S02', '42S22'], true)) {
         // Name what is missing (a table or column name only, never data) so the fix is clear.
         // "database.table" also shows when .env DB_DATABASE names a different database than the one that was updated.
-        $missing = preg_match("/Table '([^']+)' doesn't exist|Unknown column '([^']+)'/", $exception->getMessage(), $match) ? ' (missing: ' . ($match[1] !== '' ? "table $match[1]" : "column $match[2]") . ')' : '';
+        $missing = preg_match("/Table '([^']+)' doesn't exist|Unknown column '([^']+)'/", $exception->getMessage(), $match) ? ' (missing: ' . ($match[1] !== '' ? "table $match[1]" : "column $match[2]") . ' in database ' . mst_config()['db_name'] . ')' : '';
         Response::error("The database needs an update$missing. In MySQL Workbench open and run database/migrations/repair_all.sql (safe: it only adds what is missing), then restart start-server.bat and try again.", 'DATABASE_UPDATE_REQUIRED', 500);
     }
     Response::error('Internal server error', 'INTERNAL_ERROR', 500);
