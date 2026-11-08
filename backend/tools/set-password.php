@@ -9,6 +9,7 @@ declare(strict_types=1);
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/Database.php';
 require_once __DIR__ . '/../helpers/Security.php';
 require_once __DIR__ . '/../repositories/MySQLRepository.php';
 
@@ -20,7 +21,29 @@ try {
 } catch (Throwable $exception) {
     fwrite(STDERR, 'Could not reach the database: ' . $exception->getMessage() . "\n"); exit(1);
 }
-if (!$account) { fwrite(STDERR, "No account found for \"$login\".\n"); exit(2); }
+if (!$account) {
+    // Say where it looked and what is there: the usual cause is .env DB_DATABASE naming another database.
+    $config = mst_config();
+    echo "No account found for \"$login\" in database \"{$config['db_name']}\" ({$config['db_host']}:{$config['db_port']}; set by DB_DATABASE in .env).\n";
+    $accounts = Database::connection()->query('SELECT username, email, role, status FROM users ORDER BY id')->fetchAll();
+    echo $accounts ? "Accounts in this database:\n" . implode('', array_map(static fn($row) => "  - {$row['username']} ({$row['email']}, {$row['role']}, {$row['status']})\n", $accounts))
+        : "This database has no accounts at all.\n";
+    $username = str_contains($login, '@') ? strstr($login, '@', true) : $login;
+    if (!preg_match('/^[A-Za-z0-9._-]{3,40}$/', $username)) exit(2);
+    $role = strtolower($username) === 'superadmin' ? 'Super Admin' : 'Admin';
+    echo "Create the account \"$username\" ($role) in this database now? (y/n): ";
+    if (strtolower(trim((string)fgets(STDIN))) !== 'y') { echo "Nothing was changed. To reset another account: php backend/tools/set-password.php <username>\n"; exit(2); }
+    try {
+        // '!' is never a valid password hash: nobody can log in until the password below is set.
+        Database::connection()->prepare("INSERT INTO users (first_name, last_name, email, username, password_hash, role, status) VALUES ('System', 'Administrator', ?, ?, '!', ?, 'Active')")
+            ->execute([str_contains($login, '@') ? $login : "$username@mst.local", $username, $role]);
+    } catch (Throwable $exception) {
+        fwrite(STDERR, 'Could not create the account: ' . $exception->getMessage() . "\n"); exit(1);
+    }
+    MySQLRepository::log(null, 'USER_CREATED', "Account $username ($role) was created from the server console", 'user', null);
+    $account = MySQLRepository::findForLogin($username);
+    echo "Account \"$username\" created. Now choose its password.\n";
+}
 
 $read = static function (string $prompt): string {
     echo $prompt;

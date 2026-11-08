@@ -178,6 +178,7 @@ or Windows user deleted a file (that needs Windows auditing, a possible later "p
 
 | What you see | What to do |
 | --- | --- |
+| `No account found for "admin"` (set-password.php) | The tool now shows which database it used and which accounts are in it. Use one of those names, fix `DB_DATABASE` in `.env` if it is the wrong database, or answer **y** to create the account there and then choose its password. |
 | `The database needs an update (missing: ...)` (also at Login) | In MySQL Workbench open **`database/migrations/repair_all.sql`** and click Execute. It brings a database of any older version up to date in one step and only adds what is missing (your users, PCs, files and logs are kept). The last result, **Still missing**, must be empty. Then restart start-server.bat. If it says a table is missing in a database other than `mst_database`, fix `DB_DATABASE` in `.env`. |
 | `Python is not installed on this PC` | Install Python 3 and tick **Add python.exe to PATH**, then run setup-agent.bat again. |
 | `Installing the packages failed` | The PC needs internet once for the packages. Or, on the server, run `pip download -r requirements.txt -d wheels --only-binary=:all: --platform win_amd64 --python-version 3.13` inside the agent folder and copy the `wheels` folder with it: setup then works without internet. |
