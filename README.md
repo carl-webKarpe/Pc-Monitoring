@@ -225,6 +225,14 @@ Login lockout, idle session timeout, CSRF protection, strong passwords, security
 
 Real scanning with antivirus engines (Microsoft Defender, built into Windows, and/or ClamAV) on the lab PCs and on the MST server, VirusTotal, the hash blocklist and static file analysis. Five honest risk levels (**Safe, Medium, High, Unknown, Failed**) with an evidence-strength rating instead of invented percentages; a full Scan History table (search, filters, sorting, paging, CSV and report export); real uploads on the File Scanner page; automatic scans of new files; quarantine / release / delete on lab PCs; investigations; a dashboard built only from database data. Setup, rules and testing: **[SCANNER.md](SCANNER.md)**. Existing databases: run `database/migrations/phase13_scanner.sql` once after `phase12_security.sql`.
 
+## Database repair (any older version)
+
+`database/migrations/repair_all.sql` updates a database of **any** older MST version in one step: it creates missing
+tables, adds missing columns, widens list (ENUM) columns, adds indexes and links, and inserts missing default settings and
+permissions (`INSERT IGNORE`: existing values are kept). It never deletes or changes data and can be run any number of
+times; its last result lists anything still missing. It is generated from `schema.sql` by
+`database/tools/make_repair_all.py`. The API's "database needs an update" message now names the missing table or column.
+
 ## Phase 17 - Deleted folders
 
 Agent 1.4 reports a deleted folder like a deleted file: **one** event with `isFolder: true` and the same delete type
