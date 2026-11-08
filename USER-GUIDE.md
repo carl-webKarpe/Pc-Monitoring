@@ -178,6 +178,7 @@ or Windows user deleted a file (that needs Windows auditing, a possible later "p
 
 | What you see | What to do |
 | --- | --- |
+| `Unknown column 'username'`, `Field 'full_name' doesn't have a default value`, or the accounts list shows another project's accounts | Another project uses the same database name `mst_database`. Run **`database/migrations/move_to_mst_monitoring.sql`** in MySQL Workbench: it creates MST's own database `mst_monitoring` and copies MST's data into it (it only reads `mst_database`; the other project is not changed). Then set `DB_DATABASE=mst_monitoring` in `.env`, restart start-server.bat and run `php backend/tools/set-password.php admin` (answer **y**). |
 | `No account found for "admin"` (set-password.php) | The tool now shows which database it used and which accounts are in it. Use one of those names, fix `DB_DATABASE` in `.env` if it is the wrong database, or answer **y** to create the account there and then choose its password. |
 | `The database needs an update (missing: ...)` (also at Login) | In MySQL Workbench open **`database/migrations/repair_all.sql`** and click Execute. It brings a database of any older version up to date in one step and only adds what is missing (your users, PCs, files and logs are kept). The last result, **Still missing**, must be empty. Then restart start-server.bat. If it says a table is missing in a database other than `mst_database`, fix `DB_DATABASE` in `.env`. |
 | `Python is not installed on this PC` | Install Python 3 and tick **Add python.exe to PATH**, then run setup-agent.bat again. |
