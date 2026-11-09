@@ -1899,3 +1899,7 @@ select option { background: #0B1628; color: #F8FAFC; }
 .reports-actions .live-status, .heading-actions .live-status { min-height: 40px; }
 @media (max-width: 760px) { .live-status { width: 100%; justify-content: center; } }
 .heading-actions .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 40px; padding: 0.6rem 1rem; border: 0; border-radius: 10px; font-weight: 600; cursor: pointer; }
+
+/* The menu (hamburger) button only opens the sidebar on phones and small screens; on larger screens the sidebar is
+   always shown, so the button is hidden there. */
+@media (min-width: 861px) { .sidebar-toggle { display: none !important; } }
