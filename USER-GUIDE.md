@@ -103,7 +103,7 @@ both are on the same network, and that port 8081 is allowed in the server's fire
 
 1. On the server, open **Computers** and click **Refresh**. The new PC shows **ONLINE** with its real name and IP.
 2. On the lab PC, download any file with Chrome or Edge.
-3. On the server, open **Detected Files**. The file appears within a few seconds as **New file**, downloaded,
+3. On the server, open **File Activity**. The file appears within a few seconds as **New file**, downloaded,
    with the website it came from and its scan result.
 
 ---
@@ -128,11 +128,22 @@ computer name and network adapter) keeps its device ID.
 
 ---
 
+## Downloads and file activity (two pages)
+
+- **Download Detections** (menu: Threat Management): only files **downloaded** on the lab PCs, with the website they
+  came from (when Windows recorded it), the scan verdict (High risk / Medium risk / No threat detected / Unknown / Not
+  scanned), the engines that flagged it (VirusTotal "flagged / engines", or the on-PC antivirus), the time and the
+  SHA-256. Filters: computer, result, source, date; search by file name, SHA-256 or website.
+- **File Activity** (was "Detected Files"): everything else that happens to files and folders: new, edited, renamed,
+  moved and deleted files and folders, with classification, scans and quarantine. **View** on a download opens it here.
+
+Both pages update by themselves within about a second.
+
 ## Part 7: Deleted files (File Explorer, Recycle Bin, USB drives)
 
 With agent **1.3** or newer, every deletion shows **which PC**, **which file** (full original path) and **when**:
 
-| What you see on Detected Files | What happened on the PC |
+| What you see on File Activity | What happened on the PC |
 | --- | --- |
 | **DELETED · Moved to Recycle Bin** | Deleted with File Explorer (Delete key). Reported from **any folder** on the drive, with the real delete time. A folder shows **FOLDER DELETED** instead of DELETED. |
 | **DELETED · Deleted permanently** | Deleted without the Recycle Bin: Shift+Delete, a USB drive, a program or the command line. |
@@ -149,7 +160,7 @@ to see only folders.
 Restoring a file from the Recycle Bin is not a deletion and is not reported as one. Items moved to the Recycle Bin
 while the agent was not running are reported when it starts again, with their real delete time.
 
-Use **Activity** on Detected Files to show only one kind (for example **Deleted permanently**). **View** shows
+Use **Activity** on File Activity to show only one kind (for example **Deleted permanently**). **View** shows
 **How It Was Deleted** and **Deleted At**.
 
 **Watching more of the PC.** New config.json files (from Register Computer) watch:

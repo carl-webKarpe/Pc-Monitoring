@@ -23,6 +23,8 @@ final class FileEventController
         RoleMiddleware::allowModule('computer_monitoring');
         $filters = Validation::filters(['computerId' => ['computer_id', 'id'], 'type' => ['event_type', ['created', 'modified', 'renamed', 'deleted']], 'status' => ['status', ['New', 'Reviewed', 'Scan Requested', 'Scanned', 'Scan Failed']]]);
         [$limit, $offset] = Validation::page(100, 500);
+        // ?downloads=1: only downloaded files (Download Detections page), so other file activity never pushes them out.
+        if (($_GET['downloads'] ?? '') === '1') Response::success('Request successful', MySQLRepository::listDownloads($filters, $limit, $offset));
         Response::success('Request successful', MySQLRepository::list('file_events', $filters, $limit, $offset));
     }
 

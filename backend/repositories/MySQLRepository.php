@@ -59,6 +59,17 @@ final class MySQLRepository
         return self::fetchAll($select . ($conditions ? ' WHERE ' . implode(' AND ', $conditions) : '') . " ORDER BY $alias.id DESC" . $page, $params);
     }
 
+    /** Files that arrived by download (browser download completed, or Windows Mark of the Web), newest first, with their
+     *  latest scan and the VirusTotal verdict for their SHA-256 when one is known. */
+    public static function listDownloads(array $filters = [], int $limit = 500, int $offset = 0): array
+    {
+        $conditions = ["f.origin IN ('browser_download', 'internet')", "f.event_type = 'created'"]; $params = [];
+        if (isset($filters['computer_id'])) { $conditions[] = 'f.computer_id = ?'; $params[] = $filters['computer_id']; }
+        $select = str_replace(' FROM file_events f ', ', hr.malicious AS vt_malicious, hr.suspicious AS vt_suspicious, hr.total AS vt_total, hr.status AS vt_status FROM file_events f ', self::FILE_EVENT_SELECT)
+            . ' LEFT JOIN hash_reputation hr ON hr.sha256 = f.sha256';
+        return self::fetchAll($select . ' WHERE ' . implode(' AND ', $conditions) . ' ORDER BY f.detected_at DESC, f.id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset), $params);
+    }
+
     public static function find(string $resource, int $id): ?array
     {
         if (isset(self::ACCOUNT_ROLES[$resource])) { $roles = self::ACCOUNT_ROLES[$resource]; return self::fetchOne('SELECT * FROM users WHERE id = ? AND ' . self::roleClause($roles), [$id, ...$roles]); }

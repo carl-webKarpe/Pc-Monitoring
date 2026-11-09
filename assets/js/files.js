@@ -1,4 +1,4 @@
-// Detected Files: file activity reported by the lab-PC agents (/api/file-events), classification, scans and quarantine.
+// File Activity: file activity reported by the lab-PC agents (/api/file-events), classification, scans and quarantine.
 // ?computer=<id> (from a computer's details window) preselects that computer once.
 const fileState = { rows: [], computers: [], openId: null, timer: null, linkedComputer: new URLSearchParams(window.location.search).get('computer') };
 const fileEsc = (value) => mstEscape(value);
@@ -265,5 +265,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const body = document.getElementById('fileTableBody');
   if (body) body.innerHTML = '<tr><td colspan="9">Loading detected files…</td></tr>';
   // New files and scan results appear by themselves within about a second (assets/js/live.js).
-  loadFiles().then(() => window.MSTLive?.start('files', () => loadFiles({ quiet: true })));
+  loadFiles().then(() => {
+    // files.html?file=<id> (View on Download Detections): open that file's details.
+    const linked = Number(new URLSearchParams(window.location.search).get('file'));
+    if (linked) showFileDetails(linked);
+    window.MSTLive?.start('files', () => loadFiles({ quiet: true }));
+  });
 });

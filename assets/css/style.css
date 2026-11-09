@@ -1920,3 +1920,13 @@ select option { background: #0B1628; color: #F8FAFC; }
   .nav-item { min-height: 34px; margin: 0.05rem 0; padding: 0.45rem 0.75rem; }
   .sidebar-bottom { padding-top: 0.6rem; }
 }
+
+/* Download Detections */
+.downloads-table { min-width: 1100px; }
+.download-source { display: inline-flex; align-items: center; gap: 0.4rem; max-width: 240px; overflow: hidden; color: #CBD5E1; text-overflow: ellipsis; white-space: nowrap; }
+.download-source i { flex: 0 0 auto; color: var(--cyan); }
+.download-source.muted { color: var(--muted); }
+.download-source.muted i { color: var(--muted); }
+.hash-short { color: #c4b5fd; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.7rem; cursor: help; }
+.phase5-heading [data-live-status] { flex: 0 0 auto; }
+.downloads-table td:nth-child(2) { white-space: nowrap; }

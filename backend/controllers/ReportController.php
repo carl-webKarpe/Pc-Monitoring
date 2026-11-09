@@ -20,6 +20,7 @@ final class ReportController
         'computers' => ['computer_monitoring', ['computers', 'files', 'quarantine']],
         'threats' => ['threats', ['threats', 'computers', 'activity']],
         'files' => ['computer_monitoring', ['files', 'computers', 'scans', 'quarantine', 'activity']],
+        'downloads' => ['computer_monitoring', ['files', 'computers', 'scans', 'quarantine', 'activity']],
         'activity' => ['activity_logs', ['activity']],
     ];
 
