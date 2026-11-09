@@ -1884,3 +1884,14 @@ select option { background: #0B1628; color: #F8FAFC; }
   .reports-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .report-card, .metric-card { break-inside: avoid; }
 }
+
+/* Dashboard live indicator (replaces the Refresh button: the dashboard updates itself within about a second) */
+.live-status { display: inline-flex; align-items: center; gap: 0.55rem; min-height: 42px; padding: 0 0.95rem; border: 1px solid rgba(34, 197, 94, 0.35); border-radius: 10px; background: rgba(34, 197, 94, 0.08); color: #bbf7d0; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; white-space: nowrap; }
+.live-status small { color: var(--muted); font-weight: 500; letter-spacing: 0; }
+.live-status small b { color: var(--text); font-variant-numeric: tabular-nums; }
+.live-dot { position: relative; width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+.live-dot::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--green); animation: live-pulse 1.6s ease-out infinite; }
+.live-status.offline { border-color: rgba(250, 204, 21, 0.35); background: rgba(250, 204, 21, 0.08); color: #fde68a; }
+.live-status.offline .live-dot, .live-status.offline .live-dot::after { background: var(--yellow); }
+@keyframes live-pulse { from { transform: scale(1); opacity: 0.7; } to { transform: scale(2.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .live-dot::after { animation: none; } }

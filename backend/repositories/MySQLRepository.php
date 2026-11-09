@@ -156,6 +156,20 @@ final class MySQLRepository
     // ---- Agent (Phase 9) -------------------------------------------------------------------------------
 
     // A computer whose agent stopped sending heartbeats is shown offline after the "Offline Threshold" setting (minimum 45 s).
+    /** Changes whenever anything shown on the dashboard changes; only indexed MAX()/COUNT() on small tables, no file data. */
+    public static function dashboardVersion(): string
+    {
+        self::markStaleComputersOffline();
+        $row = self::db()->query("SELECT
+            (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM computers) AS computers,
+            (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM threats) AS threats,
+            (SELECT CONCAT(COALESCE(MAX(id), 0), ':', COALESCE(MAX(completed_at), '')) FROM scans) AS scans,
+            (SELECT COUNT(*) FROM scans WHERE scan_state IN ('Pending', 'Scanning')) AS running,
+            (SELECT COALESCE(MAX(id), 0) FROM file_events) AS files,
+            (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM quarantine_items) AS quarantine")->fetch();
+        return hash('sha256', implode('|', array_map('strval', $row)));
+    }
+
     public static function markStaleComputersOffline(): void
     {
         $seconds = 90;

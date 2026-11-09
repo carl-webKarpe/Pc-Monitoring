@@ -62,7 +62,7 @@
         </header>
 
         <div id="dashboard-page" class="page-content dashboard-page">
-          <section class="dashboard-heading"><div><p class="eyebrow">AUTHORIZED ENVIRONMENT</p><h2>Monitor your security posture.</h2><p>Review connected systems, threat activity, and security events.</p></div><div class="heading-actions"><div class="system-status"><span class="status-dot status-online"></span><span>SYSTEM OPERATIONAL</span><small>Last updated: <b id="lastUpdated">Just now</b></small></div><button class="btn-secondary refresh-button" id="refreshDashboard"><i class="fa-solid fa-rotate"></i> Refresh</button></div></section>
+          <section class="dashboard-heading"><div><p class="eyebrow">AUTHORIZED ENVIRONMENT</p><h2>Monitor your security posture.</h2><p>Review connected systems, threat activity, and security events.</p></div><div class="heading-actions"><div class="system-status"><span class="status-dot status-online"></span><span>SYSTEM OPERATIONAL</span></div><div class="live-status" id="liveStatus" role="status" aria-live="polite"><span class="live-dot"></span><span class="live-label">LIVE</span><small>Updated <b id="lastUpdated">just now</b></small></div></div></section>
 
           <section class="security-banner"><div class="banner-icon"><i class="fa-solid fa-shield-check"></i></div><div><p class="eyebrow">SYSTEM SECURITY STATUS</p><h3><span class="status-dot"></span> Checking…</h3><p>Loading the current security status from the MST database.</p></div><span class="banner-check" id="bannerCheck">Last check: —</span></section>
           <section class="stats-grid" id="statsGrid" aria-label="Security statistics"></section>
