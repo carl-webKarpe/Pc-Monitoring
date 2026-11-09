@@ -1903,3 +1903,20 @@ select option { background: #0B1628; color: #F8FAFC; }
 /* The menu (hamburger) button only opens the sidebar on phones and small screens; on larger screens the sidebar is
    always shown, so the button is hidden there. */
 @media (min-width: 861px) { .sidebar-toggle { display: none !important; } }
+
+/* Sidebar scrollbar: thin and dark, only visible while the pointer is over the menu (it was a wide white bar
+   between the menu and the page). The menu still scrolls with the mouse wheel when the window is short. */
+.sidebar-inner { scrollbar-width: thin; scrollbar-color: transparent transparent; scrollbar-gutter: stable; }
+.sidebar-inner:hover, .sidebar-inner:focus-within { scrollbar-color: rgba(148, 163, 184, 0.35) transparent; }
+.sidebar-inner::-webkit-scrollbar { width: 6px; }
+.sidebar-inner::-webkit-scrollbar-track { background: transparent; }
+.sidebar-inner::-webkit-scrollbar-thumb { border-radius: 999px; background: transparent; }
+.sidebar-inner:hover::-webkit-scrollbar-thumb, .sidebar-inner:focus-within::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); }
+/* Shorter windows (most laptops): a more compact menu so it usually fits without scrolling. */
+@media (min-width: 861px) and (max-height: 920px) {
+  .brand-header { padding-bottom: 0.9rem; }
+  .nav-section { padding-top: 0.35rem; }
+  .nav-label { padding: 0.6rem 0.7rem 0.25rem; }
+  .nav-item { min-height: 34px; margin: 0.05rem 0; padding: 0.45rem 0.75rem; }
+  .sidebar-bottom { padding-top: 0.6rem; }
+}
