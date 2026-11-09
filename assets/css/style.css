@@ -1795,3 +1795,12 @@ textarea.confirm-input { min-height: 80px; resize: vertical; }
 .enroll-table td, .enroll-table th { white-space: nowrap; }
 @media (max-width: 640px) { .enroll-form.one { grid-template-columns: 1fr; } }
 .enroll-body .confirm-input, .enroll-body select { box-sizing: border-box; max-width: 100%; }
+
+/* Activity Logs filters: dark, readable selects like the other pages (they had no style: white on white) */
+.table-filter { min-height: 40px; min-width: 150px; padding: 0 2.2rem 0 0.8rem; border: 1px solid var(--line); border-radius: 10px; background: rgba(8, 17, 31, 0.9) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 0.75rem center; color: var(--text); font-size: 0.78rem; cursor: pointer; outline: 0; appearance: none; -webkit-appearance: none; }
+.table-filter:hover { border-color: rgba(0, 217, 255, 0.35); }
+.table-filter:focus { border-color: rgba(0, 217, 255, 0.65); box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1); }
+.table-filter.is-active { border-color: rgba(0, 217, 255, 0.55); color: var(--cyan); }
+/* The opened list of every dropdown: dark background, light text (Windows otherwise shows white lists) */
+select option { background: #0B1628; color: #F8FAFC; }
+@media (max-width: 760px) { .section-header .table-filter { flex: 1 1 130px; min-width: 0; } }
