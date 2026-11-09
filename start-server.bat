@@ -7,7 +7,7 @@ where php >nul 2>nul || (echo PHP was not found. Install PHP or add it to PATH, 
 start "MST API - port 8081 (keep open)" cmd /k php -S 0.0.0.0:8081 backend/public/index.php
 start "MST website - port 8000 (keep open)" cmd /k php -S localhost:8000 router.php
 echo MST is running.
-echo   Website : http://localhost:8000/login.html
+echo   Website : http://localhost:8000/  (landing page; Login is on it)
 echo   API     : http://localhost:8081/api
 echo   Lab PCs : http://192.168.0.224:8081/api  (this laptop on the LAN cable)
 echo.
@@ -18,5 +18,5 @@ echo.
 echo If lab PCs cannot connect, allow port 8081 once in PowerShell as Administrator:
 echo   New-NetFirewallRule -DisplayName "MST API 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow -Profile Any
 timeout /t 2 >nul
-start "" http://localhost:8000/login.html
+start "" http://localhost:8000/
 pause
