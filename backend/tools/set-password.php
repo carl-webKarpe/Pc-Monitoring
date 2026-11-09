@@ -27,8 +27,20 @@ try {
 if (!$account) {
     // Say where it looked and what is there: the usual cause is .env DB_DATABASE naming another database.
     $config = mst_config();
-    echo "No account found for \"$login\" in database \"{$config['db_name']}\" ({$config['db_host']}:{$config['db_port']}; set by DB_DATABASE in .env).\n";
+    $envFile = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.env';
+    $source = getenv('DB_DATABASE') !== false && getenv('DB_DATABASE') !== '' ? 'the Windows environment variable DB_DATABASE (it wins over .env)'
+        : (isset(mst_env()['DB_DATABASE']) ? "DB_DATABASE in $envFile" : "the default (no DB_DATABASE line in $envFile)");
+    echo "No account found for \"$login\" in database \"{$config['db_name']}\" ({$config['db_host']}:{$config['db_port']}; set by $source).\n";
     $accounts = Database::connection()->query('SELECT username, email, role, status FROM users ORDER BY id')->fetchAll();
+    $mstUsers = (int)Database::connection()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('first_name', 'username', 'password_hash')")->fetchColumn() === 3
+        && (int)Database::connection()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND IS_NULLABLE = 'NO' AND COLUMN_DEFAULT IS NULL AND EXTRA NOT LIKE '%auto_increment%' AND COLUMN_NAME NOT IN ('first_name', 'last_name', 'email', 'username', 'password_hash', 'role')")->fetchColumn() === 0;
+    if (!$mstUsers) {
+        $other = Database::connection()->query("SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = 'mst_monitoring'")->fetchColumn();
+        echo "The users table in \"{$config['db_name']}\" belongs to ANOTHER project, so MST accounts cannot be made there.\n";
+        echo $other ? "MST's own database mst_monitoring exists: set DB_DATABASE=mst_monitoring in $envFile, then run this again.\n"
+            : "Run database/migrations/move_to_mst_monitoring.sql in MySQL Workbench first, then set DB_DATABASE=mst_monitoring in $envFile.\n";
+        exit(2);
+    }
     echo $accounts ? "Accounts in this database:\n" . implode('', array_map(static fn($row) => "  - {$row['username']} ({$row['email']}, {$row['role']}, {$row['status']})\n", $accounts))
         : "This database has no accounts at all.\n";
     $username = str_contains($login, '@') ? strstr($login, '@', true) : $login;
