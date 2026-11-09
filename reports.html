@@ -60,50 +60,62 @@
             </div>
           </div>
         </header>
-        <div class="page-content">
-          <section class="stats-grid compact-grid">
-            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Total scanned files</span><span class="metric-icon cyan"><i class="fa-solid fa-file-lines"></i></span></div><div class="metric-value">1,284</div><div class="metric-meta positive">+150 this week</div></article>
-            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Total threats</span><span class="metric-icon red"><i class="fa-solid fa-bug"></i></span></div><div class="metric-value">7</div><div class="metric-meta neutral">Current snapshot</div></article>
-            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Resolved threats</span><span class="metric-icon green"><i class="fa-solid fa-check"></i></span></div><div class="metric-value">3</div><div class="metric-meta positive">+1 today</div></article>
-            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Critical threats</span><span class="metric-icon red"><i class="fa-solid fa-exclamation"></i></span></div><div class="metric-value">2</div><div class="metric-meta negative">Needs review</div></article>
-            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Online computers</span><span class="metric-icon green"><i class="fa-solid fa-computer"></i></span></div><div class="metric-value">18</div><div class="metric-meta neutral">Healthy</div></article>
-            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Offline computers</span><span class="metric-icon gray"><i class="fa-solid fa-power-off"></i></span></div><div class="metric-value">6</div><div class="metric-meta neutral">Maintenance</div></article>
+        <div class="page-content reports-page">
+          <section class="reports-heading">
+            <div>
+              <p class="eyebrow">Security overview</p>
+              <h2>Security Report</h2>
+              <p id="reportGenerated">Loading the latest data…</p>
+            </div>
+            <div class="reports-actions">
+              <button class="btn-secondary" id="reportRefresh" type="button"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              <button class="btn-secondary" id="reportExport" type="button"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+              <button class="btn-primary" id="reportPrint" type="button"><i class="fa-solid fa-print"></i> Print / PDF</button>
+            </div>
           </section>
 
-          <section class="reports-grid">
-            <article class="card-surface chart-card">
-              <div class="section-header"><div><p class="eyebrow">Threat trends</p><h3>Threats over time</h3></div></div>
-              <div class="sparkline" aria-label="Threats over time chart">
-                <span style="--h: 35%"></span><span style="--h: 42%"></span><span style="--h: 58%"></span><span style="--h: 45%"></span><span style="--h: 60%"></span><span style="--h: 72%"></span><span style="--h: 52%"></span>
-              </div>
+          <section class="stats-grid compact-grid" id="reportStats">
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Files scanned</span><span class="metric-icon cyan"><i class="fa-solid fa-file-shield"></i></span></div><div class="metric-value">—</div><div class="metric-meta neutral">&nbsp;</div></article>
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Total threats</span><span class="metric-icon red"><i class="fa-solid fa-bug"></i></span></div><div class="metric-value">—</div><div class="metric-meta neutral">&nbsp;</div></article>
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Resolved threats</span><span class="metric-icon green"><i class="fa-solid fa-check"></i></span></div><div class="metric-value">—</div><div class="metric-meta neutral">&nbsp;</div></article>
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Critical threats</span><span class="metric-icon red"><i class="fa-solid fa-exclamation"></i></span></div><div class="metric-value">—</div><div class="metric-meta neutral">&nbsp;</div></article>
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Online computers</span><span class="metric-icon green"><i class="fa-solid fa-computer"></i></span></div><div class="metric-value">—</div><div class="metric-meta neutral">&nbsp;</div></article>
+            <article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">Offline computers</span><span class="metric-icon gray"><i class="fa-solid fa-power-off"></i></span></div><div class="metric-value">—</div><div class="metric-meta neutral">&nbsp;</div></article>
+          </section>
+
+          <section class="reports-grid reports-grid-2">
+            <article class="card-surface report-card">
+              <div class="report-card-head"><div><p class="eyebrow">Last 14 days</p><h3>Detections per day</h3><p class="report-sub">High and medium scan results plus threat records</p></div><strong class="report-total" id="detectionTotal">—</strong></div>
+              <div class="column-chart" id="detectionChart" role="img" aria-label="Detections per day, last 14 days"></div>
+              <details class="report-table"><summary>View as table</summary><div id="detectionTable"></div></details>
             </article>
-            <article class="card-surface chart-card">
-              <div class="section-header"><div><p class="eyebrow">File analysis</p><h3>Files scanned</h3></div></div>
-              <div class="sparkline blue" aria-label="Files scanned chart">
-                <span style="--h: 42%"></span><span style="--h: 52%"></span><span style="--h: 64%"></span><span style="--h: 58%"></span><span style="--h: 73%"></span><span style="--h: 80%"></span><span style="--h: 92%"></span>
-              </div>
-            </article>
-            <article class="card-surface chart-card">
-              <div class="section-header"><div><p class="eyebrow">Severity mix</p><h3>Threat severity distribution</h3></div></div>
-              <div class="donut-wrap">
-                <div class="donut-chart"><span>7</span></div>
-                <div class="legend-list">
-                  <div><span class="dot red"></span> Critical 2</div>
-                  <div><span class="dot yellow"></span> High 3</div>
-                  <div><span class="dot cyan"></span> Medium 1</div>
-                  <div><span class="dot green"></span> Low 1</div>
-                </div>
-              </div>
-            </article>
-            <article class="card-surface chart-card">
-              <div class="section-header"><div><p class="eyebrow">Endpoint state</p><h3>Computer status</h3></div></div>
-              <div class="status-ring">
-                <div class="ring-segment green" style="--pct: 72%"></div>
-                <div class="ring-segment gray" style="--pct: 28%"></div>
-                <div class="ring-center">24</div>
-              </div>
+            <article class="card-surface report-card">
+              <div class="report-card-head"><div><p class="eyebrow">Last 14 days</p><h3>Files scanned per day</h3><p class="report-sub">Completed scans (agent, automatic and uploads)</p></div><strong class="report-total" id="scanTotal">—</strong></div>
+              <div class="column-chart" id="scanChart" role="img" aria-label="Files scanned per day, last 14 days"></div>
+              <details class="report-table"><summary>View as table</summary><div id="scanTable"></div></details>
             </article>
           </section>
+
+          <section class="reports-grid reports-grid-3">
+            <article class="card-surface report-card">
+              <div class="report-card-head"><div><p class="eyebrow">Severity mix</p><h3>Threats by severity</h3></div><strong class="report-total" id="severityTotal">—</strong></div>
+              <div class="hbar-list" id="severityBars"></div>
+            </article>
+            <article class="card-surface report-card">
+              <div class="report-card-head"><div><p class="eyebrow">File analysis</p><h3>Scan results</h3></div><strong class="report-total" id="resultTotal">—</strong></div>
+              <div class="hbar-list" id="resultBars"></div>
+            </article>
+            <article class="card-surface report-card">
+              <div class="report-card-head"><div><p class="eyebrow">Endpoint state</p><h3>Computer status</h3></div><strong class="report-total" id="computerTotal">—</strong></div>
+              <div class="hbar-list" id="computerBars"></div>
+            </article>
+          </section>
+
+          <section class="card-surface report-card report-monitoring">
+            <div class="report-card-head"><div><p class="eyebrow">File monitoring</p><h3>Agents and detected files</h3></div></div>
+            <div class="report-mini-grid" id="monitoringStats"></div>
+          </section>
+          <div class="chart-tooltip hidden" id="chartTooltip" role="tooltip"></div>
         </div>
       </main>
     </div>
