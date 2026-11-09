@@ -28,7 +28,7 @@ async function fetchAgentStatus(id) { const computer = await fetchComputerDetail
 const statusText = { online: 'ONLINE', offline: 'OFFLINE', warning: 'WARNING', threat: 'THREAT' };
 const threatText = { safe: 'SAFE', warning: 'WARNING', high: 'HIGH', unknown: 'UNKNOWN' };
 
-function renderComputerStats(computers) {
+function renderComputerStats(computers, animate = true) {
   const stats = [
     ['TOTAL COMPUTERS', computers.length, 'Monitored devices', 'fa-desktop', 'cyan'],
     ['ONLINE', computers.filter((computer) => computer.status === 'online').length, `${computers.length ? Math.round((computers.filter((computer) => computer.status === 'online').length / computers.length) * 100) : 0}% online`, 'fa-circle-check', 'green'],
@@ -42,6 +42,7 @@ function renderComputerStats(computers) {
   target.innerHTML = stats.map((item) => `<article class="metric-card card-surface"><div class="metric-header"><span class="metric-label">${item[0]}</span><span class="metric-icon ${item[4]}"><i class="fa-solid ${item[3]}"></i></span></div><strong class="metric-value" data-value="${item[1]}">0</strong><span class="metric-meta">${item[2]}</span></article>`).join('');
   target.querySelectorAll('[data-value]').forEach((element) => {
     const value = Number(element.dataset.value);
+    if (!animate) { element.textContent = value.toLocaleString(); return; }
     let current = 0;
     const timer = window.setInterval(() => { current += Math.max(1, Math.ceil(value / 18)); element.textContent = Math.min(current, value).toLocaleString(); if (current >= value) window.clearInterval(timer); }, 55);
   });
@@ -166,32 +167,21 @@ function filterComputers() {
   renderComputers(filtered);
 }
 
-async function loadComputers() {
+async function loadComputers({ live = false } = {}) {
   try {
     computerRows = await fetchComputers();
   } catch (error) {
+    if (live) return false; // keep the list on screen; the live badge shows that the API is not reachable
     computerRows = [];
     showMSTToast(mstApiErrorMessage(error, 'Unable to load computers from the database.'), 'computerToast');
   }
-  renderComputerStats(computerRows);
+  renderComputerStats(computerRows, !live);
   filterComputers();
   if (computerDataIsDemo) showMSTToast('API unavailable — showing demo computer data', 'computerToast');
   // computers.html?device=MST-PC-002 (from Scan History / Detected Files): open that computer's details once.
   const linked = new URLSearchParams(window.location.search).get('device');
   if (linked && !computerRows.linkedOpened) { computerRows.linkedOpened = true; if (computerRows.some((computer) => computer.id === linked)) showComputerDetails(linked); }
-  const lastUpdated = document.getElementById('computerLastUpdated');
-  if (lastUpdated) lastUpdated.textContent = 'Just now';
-}
-
-async function refreshMonitoring() {
-  const button = document.getElementById('refreshComputers');
-  if (!button) return;
-  button.disabled = true;
-  button.innerHTML = '<i class="fa-solid fa-spinner"></i> Refreshing';
-  await loadComputers();
-  button.disabled = false;
-  button.innerHTML = '<i class="fa-solid fa-rotate"></i> Refresh';
-  if (!computerDataIsDemo) showMSTToast('Monitoring data updated', 'computerToast');
+  return true;
 }
 
 function initializeComputerMonitoring() {
@@ -201,11 +191,14 @@ function initializeComputerMonitoring() {
   if (body) body.innerHTML = '<tr><td colspan="9">Loading computers…</td></tr>';
   renderNetworkTopology();
   ['computerSearch', 'statusFilter', 'threatFilter', 'sortFilter'].forEach((id) => document.getElementById(id)?.addEventListener(id === 'computerSearch' ? 'input' : 'change', filterComputers));
-  document.getElementById('refreshComputers')?.addEventListener('click', refreshMonitoring);
-  document.getElementById('emptyRefresh')?.addEventListener('click', filterComputers);
+  document.getElementById('emptyRefresh')?.addEventListener('click', () => {
+    ['computerSearch', 'statusFilter', 'threatFilter'].forEach((id) => { const field = document.getElementById(id); if (field) field.value = id === 'computerSearch' ? '' : 'all'; });
+    filterComputers();
+  });
   document.querySelectorAll('#computers-page [data-close-modal]').forEach((button) => button.addEventListener('click', () => document.getElementById('computerDetailsModal')?.classList.add('hidden')));
-  document.addEventListener('mst:computers-changed', loadComputers);
-  loadComputers();
+  document.addEventListener('mst:computers-changed', () => loadComputers());
+  // Heartbeats, new PCs and status changes appear by themselves within about a second (assets/js/live.js).
+  loadComputers().then(() => window.MSTLive?.start('computers', () => loadComputers({ live: true })));
 }
 
 document.addEventListener('DOMContentLoaded', initializeComputerMonitoring);

@@ -45,26 +45,37 @@ function renderActivity(filters) {
   }).join('') : '<tr><td colspan="4">No activity recorded for the selected filters.</td></tr>';
 }
 
+// Refills a filter's choices and keeps the one the user picked (when it is still there).
 function fillActivityFilter(select, placeholder, values) {
   if (!select) return;
+  const picked = select.selectedIndex > 0 ? select.value : '';
   select.innerHTML = `<option>${mstEscape(placeholder)}</option>${values.map((value) => `<option>${mstEscape(value)}</option>`).join('')}`;
+  if (picked && values.includes(picked)) select.value = picked;
+  select.classList.toggle('is-active', select.selectedIndex > 0);
+}
+
+async function loadActivity(filters, { live = false } = {}) {
+  try {
+    const { data, demo } = await window.MSTApi.apiGetOrDemo('/activity?limit=200', activityDemoRows);
+    if (demo) { if (!live) showMSTToast('API unavailable — showing demo activity'); return false; }
+    activityRows = data;
+  } catch (error) {
+    if (!live) showMSTToast(mstApiErrorMessage(error, 'Unable to load activity logs from the database.'));
+    return false;
+  }
+  fillActivityFilter(filters[0], 'Date', ['Today', 'Yesterday']);
+  fillActivityFilter(filters[1], 'User', [...new Set(activityRows.map(activityUser))].sort());
+  fillActivityFilter(filters[2], 'Action', [...new Set(activityRows.map((row) => activityLabel(row.action)[0]))].sort());
+  renderActivity(filters);
+  return true;
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
   const table = document.querySelector('.log-table');
   if (!table || !window.MSTApi) return;
   const filters = [...document.querySelectorAll('.table-filter')].slice(0, 3);
-  try {
-    const { data, demo } = await window.MSTApi.apiGetOrDemo('/activity?limit=200', activityDemoRows);
-    if (demo) { showMSTToast('API unavailable — showing demo activity'); return; }
-    activityRows = data;
-  } catch (error) {
-    showMSTToast(mstApiErrorMessage(error, 'Unable to load activity logs from the database.'));
-    return;
-  }
-  fillActivityFilter(filters[0], 'Date', ['Today', 'Yesterday']);
-  fillActivityFilter(filters[1], 'User', [...new Set(activityRows.map(activityUser))].sort());
-  fillActivityFilter(filters[2], 'Action', [...new Set(activityRows.map((row) => activityLabel(row.action)[0]))].sort());
   filters.forEach((select) => select?.addEventListener('change', () => { select.classList.toggle('is-active', select.selectedIndex > 0); renderActivity(filters); }));
-  renderActivity(filters);
+  // New log entries appear by themselves within about a second (assets/js/live.js).
+  await loadActivity(filters);
+  window.MSTLive?.start('activity', () => loadActivity(filters, { live: true }));
 });

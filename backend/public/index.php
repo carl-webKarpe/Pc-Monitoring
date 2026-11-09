@@ -69,7 +69,7 @@ if ($resource === 'auth') {
 }
 if ($resource === 'health' && $id === 'database' && $action === null) HealthController::database($method);
 if ($resource === 'dashboard' && $id === null) ReportController::index($method, 'dashboard');
-if ($resource === 'dashboard' && $id === 'changes' && $action === null) ReportController::changes($method);
+if ($resource === 'changes' && $id === null) ReportController::changes($method);
 if ($resource === 'agent' && $action === null) AgentController::index($method, $id);
 if ($resource === 'file-events') FileEventController::index($method, $id, $action);
 if ($resource === 'users') UserController::index($method, $id);

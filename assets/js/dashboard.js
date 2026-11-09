@@ -1,13 +1,8 @@
 // Dashboard: every number and list comes from the MST database (/api/dashboard and the resource APIs).
 // When the API cannot be reached the page says so instead of showing example numbers.
-const DASHBOARD_CHECK_MS = 1000;        // how often the dashboard checks for changes
-const DASHBOARD_FULL_RELOAD_MS = 60000; // full reload at least this often
-const DASHBOARD_RETRY_MAX_MS = 15000;   // when the API cannot be reached, check at most this rarely
-const dashboardLive = { version: null, loadedAt: 0, busy: false, delay: DASHBOARD_CHECK_MS };
 const dashboardStatus = { online: ['online', 'ONLINE'], warning: ['warning', 'WARNING'], offline: ['offline', 'OFFLINE'], threat: ['danger', 'THREAT'] };
 const dashboardSeverity = { CRITICAL: 'critical', HIGH: 'high', MEDIUM: 'medium', LOW: 'low', SAFE: 'resolved' };
 const dashboardPercent = (part, total) => (total ? Math.round((part / total) * 100) : 0);
-let dashboardTimer = null;
 
 async function fetchDashboardData() { return (await window.MSTApi.apiGet('/dashboard')).data; }
 async function fetchComputerStatus() { return (await window.MSTApi.apiGet('/computers?limit=5')).data; }
@@ -192,56 +187,13 @@ async function loadDashboard({ animate = true } = {}) {
   if (threats) { renderDashboardThreats(threats); renderDashboardRisk(threats, summary); } else failed('#dashboard-page .threat-list', 'Unable to load threats.');
   if (scans) renderDashboardScans(scans); else failed('#dashboard-page .scan-list', 'Unable to load scans.');
   if (events) renderRecentFileEvents(events); else failed('#recentFileEvents', 'Unable to load file activity.');
-  const lastUpdated = document.getElementById('lastUpdated');
-  if (lastUpdated) lastUpdated.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
   return true;
-}
-
-// Live updates: every second the dashboard asks the API for a tiny fingerprint of its data (/dashboard/changes) and
-// reloads only when it changed, so a heartbeat, file event, scan or threat shows within about a second without
-// loading everything every second. A full reload still runs every minute (times such as "2 min ago" move on).
-async function checkDashboardChanges() {
-  if (dashboardLive.busy) return;
-  dashboardLive.busy = true;
-  try {
-    const { data } = await window.MSTApi.apiGet('/dashboard/changes');
-    const due = Date.now() - dashboardLive.loadedAt >= DASHBOARD_FULL_RELOAD_MS;
-    if (data.version !== dashboardLive.version || due) {
-      if (await loadDashboard({ animate: false })) { dashboardLive.version = data.version; dashboardLive.loadedAt = Date.now(); }
-    }
-    setLiveStatus(true);
-    const lastUpdated = document.getElementById('lastUpdated'); // the data is current as of this check
-    if (lastUpdated) lastUpdated.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
-    dashboardLive.delay = DASHBOARD_CHECK_MS;
-  } catch (error) {
-    if (error.status === 401) return; // signed out: api.js goes to the login page
-    setLiveStatus(false);
-    dashboardLive.delay = Math.min(DASHBOARD_RETRY_MAX_MS, dashboardLive.delay * 2); // the API is down: try less often
-  } finally {
-    dashboardLive.busy = false;
-  }
-}
-
-function setLiveStatus(connected) {
-  const status = document.getElementById('liveStatus');
-  if (!status) return;
-  status.classList.toggle('offline', !connected);
-  status.querySelector('.live-label').textContent = connected ? 'LIVE' : 'RECONNECTING';
-}
-
-function scheduleDashboardRefresh() {
-  window.clearTimeout(dashboardTimer);
-  dashboardTimer = window.setTimeout(async () => {
-    if (!document.hidden) await checkDashboardChanges();
-    scheduleDashboardRefresh();
-  }, dashboardLive.delay);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('dashboard-page')) return;
-  loadDashboard().then((loaded) => { if (loaded) dashboardLive.loadedAt = Date.now(); scheduleDashboardRefresh(); });
-  // Back to the tab: check at once instead of waiting.
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { dashboardLive.delay = DASHBOARD_CHECK_MS; checkDashboardChanges(); } });
+  // Updates by itself within about a second (assets/js/live.js); no Refresh button needed.
+  loadDashboard().then(() => window.MSTLive?.start('dashboard', () => loadDashboard({ animate: false })));
 });
 
 window.fetchDashboardData = fetchDashboardData;

@@ -1895,3 +1895,7 @@ select option { background: #0B1628; color: #F8FAFC; }
 .live-status.offline .live-dot, .live-status.offline .live-dot::after { background: var(--yellow); }
 @keyframes live-pulse { from { transform: scale(1); opacity: 0.7; } to { transform: scale(2.6); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .live-dot::after { animation: none; } }
+.heading-live-actions { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+.reports-actions .live-status, .heading-actions .live-status { min-height: 40px; }
+@media (max-width: 760px) { .live-status { width: 100%; justify-content: center; } }
+.heading-actions .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 40px; padding: 0.6rem 1rem; border: 0; border-radius: 10px; font-weight: 600; cursor: pointer; }

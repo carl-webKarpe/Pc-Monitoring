@@ -1,7 +1,6 @@
 // Reports: security overview from the MySQL-backed summary (/api/reports). Charts are plain HTML (no chart library):
 // summary cards, 14-day column charts (with a table view and hover details) and labelled bar lists. Refreshes itself.
-const REPORT_REFRESH_MS = 30000;
-const reportState = { data: null, timer: null };
+const reportState = { data: null };
 const reportEsc = (value) => mstEscape(String(value ?? ''));
 const reportNumber = (value) => Number(value || 0).toLocaleString();
 const reportPercent = (part, total) => (total ? Math.round((part / total) * 100) : 0);
@@ -90,7 +89,7 @@ function renderBars(containerId, rows, total, emptyText) {
 function renderReport(report) {
   reportState.data = report;
   const generated = mstParseDate(report.generatedAt);
-  document.getElementById('reportGenerated').textContent = `Generated ${generated ? mstFormatDate(report.generatedAt) : 'just now'} · updates every 30 seconds`;
+  document.getElementById('reportGenerated').textContent = `Generated ${generated ? mstFormatDate(report.generatedAt) : 'just now'} · updates by itself`;
   renderStats(report);
   const days = report.trend || [];
   const detections = (day) => day.high + day.medium + day.threats;
@@ -126,10 +125,12 @@ function renderReport(report) {
 async function loadReport({ quiet = false } = {}) {
   try {
     const { data, demo } = await window.MSTApi.apiGetOrDemo('/reports', null);
-    if (demo || !data) { if (!quiet) showMSTToast('API unavailable — the report cannot be shown right now'); return; }
+    if (demo || !data) { if (!quiet) showMSTToast('API unavailable — the report cannot be shown right now'); return false; }
     renderReport(data);
+    return true;
   } catch (error) {
     if (!quiet) showMSTToast(mstApiErrorMessage(error, 'Unable to load reports from the database.'));
+    return false;
   }
 }
 
@@ -154,9 +155,8 @@ function exportReportCsv() {
 
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('reportStats') || !window.MSTApi) return;
-  document.getElementById('reportRefresh').addEventListener('click', () => loadReport().then(() => reportState.data && showMSTToast('Report updated')));
   document.getElementById('reportExport').addEventListener('click', exportReportCsv);
   document.getElementById('reportPrint').addEventListener('click', () => window.print());
-  loadReport();
-  reportState.timer = window.setInterval(() => { if (!document.hidden) loadReport({ quiet: true }); }, REPORT_REFRESH_MS);
+  // Updates by itself within about a second (assets/js/live.js).
+  loadReport().then(() => window.MSTLive?.start('reports', () => loadReport({ quiet: true })));
 });

@@ -1,7 +1,6 @@
 // Detected Files: file activity reported by the lab-PC agents (/api/file-events), classification, scans and quarantine.
 // ?computer=<id> (from a computer's details window) preselects that computer once.
 const fileState = { rows: [], computers: [], openId: null, timer: null, linkedComputer: new URLSearchParams(window.location.search).get('computer') };
-const FILE_REFRESH_MS = 10000;
 const fileEsc = (value) => mstEscape(value);
 const fileStatusClass = (status) => String(status).toLowerCase().replace(/\s+/g, '-');
 const fileIsAdmin = () => sessionStorage.getItem('mstRole') === 'admin'; // File Scanner is an Admin module; the server enforces it too.
@@ -133,12 +132,13 @@ async function loadFiles({ quiet = false } = {}) {
     fileState.computers = Array.isArray(computers.data) ? computers.data : [];
   } catch (error) {
     if (!quiet) showMSTToast(mstApiErrorMessage(error, 'Unable to load detected files.'), 'fileToast');
-    return;
+    return false;
   }
   populateFileComputerFilter();
   renderFileStats();
   renderFiles();
   if (fileState.openId !== null) showFileDetails(fileState.openId, { refresh: true });
+  return true;
 }
 
 function fileLatestScanSummary(scan) {
@@ -259,13 +259,11 @@ function closeFileDetails() {
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('files-page') || !window.MSTApi) return;
   ['fileSearch', 'fileComputerFilter', 'fileActivityFilter', 'fileRiskFilter', 'fileClassFilter', 'fileDateFilter'].forEach((id) => document.getElementById(id)?.addEventListener(id === 'fileSearch' ? 'input' : 'change', renderFiles));
-  document.getElementById('refreshFiles')?.addEventListener('click', () => loadFiles());
   document.querySelectorAll('[data-files-close]').forEach((button) => button.addEventListener('click', closeFileDetails));
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { closeFileDetails(); window.MSTScanActions?.close(); } });
   document.addEventListener('mst:scans-changed', () => loadFiles({ quiet: true }));
   const body = document.getElementById('fileTableBody');
   if (body) body.innerHTML = '<tr><td colspan="9">Loading detected files…</td></tr>';
-  loadFiles();
-  // Keep the list current so new files and scan results appear without reloading the page.
-  fileState.timer = window.setInterval(() => { if (!document.hidden) loadFiles({ quiet: true }); }, FILE_REFRESH_MS);
+  // New files and scan results appear by themselves within about a second (assets/js/live.js).
+  loadFiles().then(() => window.MSTLive?.start('files', () => loadFiles({ quiet: true })));
 });

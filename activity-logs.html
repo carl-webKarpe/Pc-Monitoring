@@ -62,7 +62,8 @@
         </header>
         <div class="page-content">
           <section class="card-surface">
-            <div class="section-header justify-between"><div><p class="eyebrow">Audit trail</p><h3>Recent Activity</h3></div><div class="flex flex-wrap gap-3">
+            <div class="section-header justify-between"><div><p class="eyebrow">Audit trail</p><h3>Recent Activity</h3></div><div class="flex flex-wrap items-center gap-3">
+              <div data-live-status></div>
               <select class="table-filter" aria-label="Filter by date"><option>Date</option><option>Today</option><option>Yesterday</option></select>
               <select class="table-filter" aria-label="Filter by user"><option>User</option><option>admin01</option><option>superadmin</option></select>
               <select class="table-filter" aria-label="Filter by action"><option>Action</option><option>Logged in</option><option>Added administrator</option></select>
@@ -84,7 +85,7 @@
       </main>
     </div>
     <script src="assets/js/api.js"></script>
-    <script src="assets/js/app.js"></script>
+    <script src="assets/js/app.js"></script><script src="assets/js/live.js"></script>
     <script src="assets/js/activity-logs.js"></script>
   </body>
 </html>

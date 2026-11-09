@@ -156,18 +156,22 @@ final class MySQLRepository
     // ---- Agent (Phase 9) -------------------------------------------------------------------------------
 
     // A computer whose agent stopped sending heartbeats is shown offline after the "Offline Threshold" setting (minimum 45 s).
-    /** Changes whenever anything shown on the dashboard changes; only indexed MAX()/COUNT() on small tables, no file data. */
-    public static function dashboardVersion(): string
+    // Cheap fingerprints of each kind of data (indexed MAX()/COUNT() only, no file data) for /api/changes.
+    private const LIVE_PARTS = [
+        'computers' => "SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM computers",
+        'threats' => "SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM threats",
+        'scans' => "SELECT CONCAT(COALESCE(MAX(id), 0), ':', COALESCE(MAX(completed_at), ''), ':', (SELECT COUNT(*) FROM scans WHERE scan_state IN ('Pending', 'Scanning'))) FROM scans",
+        'files' => "SELECT COALESCE(MAX(id), 0) FROM file_events", // rows only disappear with their computer (see 'computers')
+        'quarantine' => "SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM quarantine_items",
+        'activity' => "SELECT COALESCE(MAX(id), 0) FROM activity_logs",
+    ];
+
+    /** Changes whenever any of the given kinds of data changes. */
+    public static function liveVersion(array $parts): string
     {
-        self::markStaleComputersOffline();
-        $row = self::db()->query("SELECT
-            (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM computers) AS computers,
-            (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM threats) AS threats,
-            (SELECT CONCAT(COALESCE(MAX(id), 0), ':', COALESCE(MAX(completed_at), '')) FROM scans) AS scans,
-            (SELECT COUNT(*) FROM scans WHERE scan_state IN ('Pending', 'Scanning')) AS running,
-            (SELECT COALESCE(MAX(id), 0) FROM file_events) AS files,
-            (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM quarantine_items) AS quarantine")->fetch();
-        return hash('sha256', implode('|', array_map('strval', $row)));
+        if (in_array('computers', $parts, true)) self::markStaleComputersOffline(); // an offline PC shows within a second too
+        $sql = 'SELECT ' . implode(', ', array_map(fn($part) => '(' . self::LIVE_PARTS[$part] . ')', $parts));
+        return hash('sha256', implode('|', array_map('strval', self::db()->query($sql)->fetch(PDO::FETCH_NUM))));
     }
 
     public static function markStaleComputersOffline(): void
